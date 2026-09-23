@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Layouts
@@ -20,6 +20,12 @@ import AttendanceLive from './pages/admin/AttendanceLive';
 import Reports from './pages/admin/Reports';
 import AuditLogs from './pages/admin/AuditLogs';
 
+// On GitHub Pages, use HashRouter to prevent 404 on page reload
+const Router =
+  typeof window !== 'undefined' && window.location.hostname.includes('github.io')
+    ? HashRouter
+    : BrowserRouter;
+
 // Route Guards
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -37,7 +43,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
-    // If employee attempts to access admin route, redirect to employee dashboard
     if (user?.role === 'employee') {
       return <Navigate to="/employee/dashboard" replace />;
     }
@@ -60,7 +65,7 @@ const RootRedirect = () => {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <Router>
         <Routes>
           {/* Public Authentication */}
           <Route path="/login" element={<Login />} />
@@ -103,7 +108,7 @@ function App() {
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<RootRedirect />} />
         </Routes>
-      </BrowserRouter>
+      </Router>
     </AuthProvider>
   );
 }

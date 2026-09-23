@@ -1,4 +1,9 @@
 import axios from 'axios';
+import { mockHandleRequest } from './mockService';
+
+const isGitHubPages =
+  typeof window !== 'undefined' &&
+  (window.location.hostname.includes('github.io') || window.location.hostname.includes('pages.dev'));
 
 const api = axios.create({
   baseURL: '/api',
@@ -14,6 +19,27 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // If on GitHub Pages, use in-browser mock adapter directly
+    if (isGitHubPages) {
+      config.adapter = async (cfg) => {
+        const mockRes = await mockHandleRequest(cfg);
+        if (mockRes.status >= 200 && mockRes.status < 300) {
+          return {
+            data: mockRes.data,
+            status: mockRes.status,
+            statusText: 'OK',
+            headers: {},
+            config: cfg,
+          };
+        } else {
+          const err = new Error(mockRes.data?.message || 'Mock Error');
+          err.response = { data: mockRes.data, status: mockRes.status };
+          throw err;
+        }
+      };
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -22,7 +48,23 @@ api.interceptors.request.use(
 // Catch 401 Unauthorized globally
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    // If backend connection refused (e.g. static host without server), fallback to mock
+    if (
+      error.code === 'ERR_NETWORK' ||
+      error.message?.includes('Network Error') ||
+      (error.response && error.response.status === 404)
+    ) {
+      try {
+        const mockRes = await mockHandleRequest(error.config);
+        if (mockRes.status >= 200 && mockRes.status < 300) {
+          return { data: mockRes.data, status: mockRes.status };
+        }
+      } catch (mockErr) {
+        // Fall through
+      }
+    }
+
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('hrms_token');
       localStorage.removeItem('hrms_user');

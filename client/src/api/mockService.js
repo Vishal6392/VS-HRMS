@@ -1,0 +1,615 @@
+/**
+ * In-Browser Mock Service for GitHub Pages (Static Hosting)
+ * Enables 100% full software functionality directly in the browser when running without a live Node.js server.
+ */
+
+const STORAGE_KEYS = {
+  USERS: 'vs_hrms_mock_users',
+  EMPLOYEES: 'vs_hrms_mock_employees',
+  SHIFTS: 'vs_hrms_mock_shifts',
+  EVENTS: 'vs_hrms_mock_events',
+  SUMMARIES: 'vs_hrms_mock_summaries',
+  AUDIT: 'vs_hrms_mock_audit',
+  INITIALIZED: 'vs_hrms_mock_initialized_v2',
+};
+
+// Initial Seed Data
+const DEFAULT_SHIFTS = [
+  {
+    _id: 'shift_gen',
+    shiftName: 'General Day Shift',
+    shiftCode: 'GEN-01',
+    shiftType: 'GENERAL',
+    startTime: '09:30',
+    endTime: '18:30',
+    gracePeriodMinutes: 15,
+    minWorkingHours: 8,
+    breakPolicy: { allowedBreaks: 1, maxBreakMinutes: 60 },
+    isActive: true,
+    description: 'Standard 9-hour corporate schedule with 1-hour lunch break.',
+  },
+  {
+    _id: 'shift_ngt',
+    shiftName: 'Night Operations Shift',
+    shiftCode: 'NGT-01',
+    shiftType: 'NIGHT',
+    startTime: '22:00',
+    endTime: '06:00',
+    gracePeriodMinutes: 15,
+    minWorkingHours: 7.5,
+    breakPolicy: { allowedBreaks: 1, maxBreakMinutes: 45 },
+    isActive: true,
+    description: 'Overnight shift crossing midnight (10:00 PM to 06:00 AM next day).',
+  },
+  {
+    _id: 'shift_spl',
+    shiftName: 'Hospitality Split Shift',
+    shiftCode: 'SPL-01',
+    shiftType: 'SPLIT',
+    startTime: '06:00',
+    endTime: '22:00',
+    gracePeriodMinutes: 15,
+    minWorkingHours: 8,
+    breakPolicy: { allowedBreaks: 2, maxBreakMinutes: 30 },
+    splitSegments: [
+      { segmentName: 'Morning Service', startTime: '06:00', endTime: '10:00' },
+      { segmentName: 'Evening Service', startTime: '18:00', endTime: '22:00' },
+    ],
+    isActive: true,
+    description: 'Split schedule with two distinct duty segments in a single calendar day.',
+  },
+];
+
+const DEFAULT_EMPLOYEES = [
+  {
+    _id: 'emp_admin',
+    employeeId: 'ADM001',
+    fullName: 'Vikram Singh (HR Lead)',
+    mobile: '+91 98765 00001',
+    email: 'admin@hrms.local',
+    department: 'Human Resources',
+    designation: 'Head of People Operations',
+    joiningDate: '2022-01-15T00:00:00.000Z',
+    assignedShift: DEFAULT_SHIFTS[0],
+    employmentStatus: 'ACTIVE',
+  },
+  {
+    _id: 'emp_john',
+    employeeId: 'EMP101',
+    fullName: 'John Doe',
+    mobile: '+91 98765 11001',
+    email: 'john@hrms.local',
+    department: 'Engineering',
+    designation: 'Senior Frontend Engineer',
+    joiningDate: '2023-03-01T00:00:00.000Z',
+    assignedShift: DEFAULT_SHIFTS[0],
+    employmentStatus: 'ACTIVE',
+  },
+  {
+    _id: 'emp_priya',
+    employeeId: 'EMP102',
+    fullName: 'Priya Sharma',
+    mobile: '+91 98765 11002',
+    email: 'priya@hrms.local',
+    department: 'Operations',
+    designation: 'Night Operations Lead',
+    joiningDate: '2023-05-15T00:00:00.000Z',
+    assignedShift: DEFAULT_SHIFTS[1],
+    employmentStatus: 'ACTIVE',
+  },
+  {
+    _id: 'emp_rahul',
+    employeeId: 'EMP103',
+    fullName: 'Rahul Verma',
+    mobile: '+91 98765 11003',
+    email: 'rahul@hrms.local',
+    department: 'Logistics',
+    designation: 'Fleet Supervisor',
+    joiningDate: '2023-08-10T00:00:00.000Z',
+    assignedShift: DEFAULT_SHIFTS[2],
+    employmentStatus: 'ACTIVE',
+  },
+  {
+    _id: 'emp_anita',
+    employeeId: 'EMP104',
+    fullName: 'Anita Desai',
+    mobile: '+91 98765 11004',
+    email: 'anita@hrms.local',
+    department: 'Quality Assurance',
+    designation: 'QA Analyst',
+    joiningDate: '2024-01-20T00:00:00.000Z',
+    assignedShift: DEFAULT_SHIFTS[0],
+    employmentStatus: 'ACTIVE',
+  },
+];
+
+const DEFAULT_USERS = [
+  {
+    _id: 'usr_admin',
+    email: 'admin@hrms.local',
+    password: 'Admin@123',
+    role: 'admin',
+    employee: DEFAULT_EMPLOYEES[0],
+    isActive: true,
+  },
+  {
+    _id: 'usr_john',
+    email: 'john@hrms.local',
+    password: 'Emp@123',
+    role: 'employee',
+    employee: DEFAULT_EMPLOYEES[1],
+    isActive: true,
+  },
+  {
+    _id: 'usr_priya',
+    email: 'priya@hrms.local',
+    password: 'Emp@123',
+    role: 'employee',
+    employee: DEFAULT_EMPLOYEES[2],
+    isActive: true,
+  },
+  {
+    _id: 'usr_rahul',
+    email: 'rahul@hrms.local',
+    password: 'Emp@123',
+    role: 'employee',
+    employee: DEFAULT_EMPLOYEES[3],
+    isActive: true,
+  },
+  {
+    _id: 'usr_anita',
+    email: 'anita@hrms.local',
+    password: 'Emp@123',
+    role: 'employee',
+    employee: DEFAULT_EMPLOYEES[4],
+    isActive: true,
+  },
+];
+
+const samplePhoto = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%232563eb"/><circle cx="100" cy="80" r="40" fill="%23ffffff"/><path d="M40 180 C40 130 160 130 160 180 Z" fill="%23ffffff"/></svg>';
+
+function initMockStorage() {
+  if (!localStorage.getItem(STORAGE_KEYS.INITIALIZED)) {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = yesterdayDate.toISOString().split('T')[0];
+
+    localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(DEFAULT_SHIFTS));
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(DEFAULT_EMPLOYEES));
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
+
+    const initialEvents = [
+      {
+        _id: 'ev_1',
+        employeeId: 'EMP104',
+        attendanceDate: today,
+        eventType: 'CHECK_IN',
+        timestamp: new Date(`${today}T09:48:00`).toISOString(),
+        latitude: 28.6139,
+        longitude: 77.2090,
+        accuracy: 14,
+        photoUrl: samplePhoto,
+      },
+    ];
+
+    const initialSummaries = [
+      {
+        _id: 'sum_anita',
+        employee: DEFAULT_EMPLOYEES[4],
+        employeeId: 'EMP104',
+        attendanceDate: today,
+        shift: DEFAULT_SHIFTS[0],
+        scheduledHours: 9.0,
+        workingHours: 4.5,
+        breakDurationMinutes: 0,
+        lateMinutes: 18,
+        earlyLeavingMinutes: 0,
+        overtimeMinutes: 0,
+        status: 'LATE',
+        firstCheckIn: new Date(`${today}T09:48:00`).toISOString(),
+        lastCheckOut: null,
+        events: [initialEvents[0]],
+      },
+    ];
+
+    const initialAudit = [
+      {
+        _id: 'aud_1',
+        performedByName: 'Vikram Singh (HR Lead)',
+        action: 'SYSTEM_INITIALIZED',
+        targetRecord: { model: 'System', identifier: 'Base HRMS Setup' },
+        details: 'Initial cloud shift masters and employee directory initialized.',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(initialEvents));
+    localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(initialSummaries));
+    localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(initialAudit));
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+  }
+}
+
+initMockStorage();
+
+export const mockHandleRequest = async (config) => {
+  initMockStorage();
+
+  const url = config.url.replace('/api', '');
+  const method = (config.method || 'get').toLowerCase();
+  const data = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
+
+  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+  const employees = JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || '[]');
+  const shifts = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHIFTS) || '[]');
+  let summaries = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUMMARIES) || '[]');
+  let events = JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]');
+  let auditLogs = JSON.parse(localStorage.getItem(STORAGE_KEYS.AUDIT) || '[]');
+
+  const getSavedUser = () => {
+    try {
+      return JSON.parse(localStorage.getItem('hrms_user'));
+    } catch {
+      return null;
+    }
+  };
+
+  // 1. Auth Login
+  if (url === '/auth/login' && method === 'post') {
+    const { email, password } = data;
+    const user = users.find((u) => u.email.toLowerCase() === (email || '').toLowerCase().trim());
+
+    if (!user || user.password !== password) {
+      return { status: 401, data: { success: false, message: 'Invalid email or password.' } };
+    }
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        message: 'Login successful',
+        token: `mock_jwt_token_${user._id}`,
+        user: {
+          _id: user._id,
+          email: user.email,
+          role: user.role,
+          employee: user.employee,
+        },
+      },
+    };
+  }
+
+  // 2. Auth Me
+  if (url === '/auth/me' && method === 'get') {
+    const cur = getSavedUser();
+    return { status: 200, data: { success: true, user: cur } };
+  }
+
+  // 3. Auth Change Password
+  if (url === '/auth/change-password' && method === 'post') {
+    return { status: 200, data: { success: true, message: 'Password updated successfully.' } };
+  }
+
+  // 4. Shifts
+  if (url.startsWith('/shifts') && method === 'get') {
+    return { status: 200, data: { success: true, count: shifts.length, data: shifts } };
+  }
+  if (url === '/shifts' && method === 'post') {
+    const newShift = { ...data, _id: `shift_${Date.now()}`, isActive: true };
+    shifts.push(newShift);
+    localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+    return { status: 201, data: { success: true, message: 'Shift created successfully.', data: newShift } };
+  }
+  if (url.includes('/shifts/') && method === 'put') {
+    const id = url.split('/shifts/')[1];
+    const idx = shifts.findIndex((s) => s._id === id);
+    if (idx !== -1) {
+      shifts[idx] = { ...shifts[idx], ...data };
+      localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+      return { status: 200, data: { success: true, message: 'Shift updated.', data: shifts[idx] } };
+    }
+  }
+  if (url.includes('/shifts/') && url.includes('/toggle-status')) {
+    const id = url.split('/shifts/')[1].split('/')[0];
+    const shift = shifts.find((s) => s._id === id);
+    if (shift) {
+      shift.isActive = !shift.isActive;
+      localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
+      return { status: 200, data: { success: true, message: 'Status toggled', data: shift } };
+    }
+  }
+
+  // 5. Employees
+  if (url.startsWith('/employees') && method === 'get') {
+    return { status: 200, data: { success: true, total: employees.length, data: employees } };
+  }
+  if (url === '/employees' && method === 'post') {
+    const assignedShiftObj = shifts.find((s) => s._id === data.assignedShift) || shifts[0];
+    const newEmp = {
+      ...data,
+      _id: `emp_${Date.now()}`,
+      assignedShift: assignedShiftObj,
+      employmentStatus: 'ACTIVE',
+    };
+    employees.push(newEmp);
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
+    return { status: 201, data: { success: true, message: 'Employee created.', data: newEmp } };
+  }
+  if (url.includes('/employees/') && method === 'put') {
+    const id = url.split('/employees/')[1];
+    const idx = employees.findIndex((e) => e._id === id);
+    if (idx !== -1) {
+      employees[idx] = { ...employees[idx], ...data };
+      localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
+      return { status: 200, data: { success: true, message: 'Employee updated.', data: employees[idx] } };
+    }
+  }
+  if (url.includes('/employees/') && url.includes('/toggle-status')) {
+    const id = url.split('/employees/')[1].split('/')[0];
+    const emp = employees.find((e) => e._id === id);
+    if (emp) {
+      emp.employmentStatus = emp.employmentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+      localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
+      return { status: 200, data: { success: true, message: 'Status toggled', data: emp } };
+    }
+  }
+
+  // 6. Attendance Today
+  if (url === '/attendance/today' && method === 'get') {
+    const cur = getSavedUser();
+    const today = new Date().toISOString().split('T')[0];
+    const empId = cur?.employee?.employeeId || 'EMP101';
+    const empObj = employees.find((e) => e.employeeId === empId) || employees[1];
+
+    let summary = summaries.find((s) => s.employeeId === empId && s.attendanceDate === today);
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        attendanceDate: today,
+        shift: empObj.assignedShift || shifts[0],
+        employee: empObj,
+        summary: summary || null,
+      },
+    };
+  }
+
+  // 7. Attendance Punch
+  if (url === '/attendance/punch' && method === 'post') {
+    const cur = getSavedUser();
+    const today = new Date().toISOString().split('T')[0];
+    const empId = cur?.employee?.employeeId || 'EMP101';
+    const empObj = employees.find((e) => e.employeeId === empId) || employees[1];
+    const shift = empObj.assignedShift || shifts[0];
+
+    const punchNow = new Date();
+    const newEvent = {
+      _id: `ev_${Date.now()}`,
+      employee: empObj,
+      employeeId: empId,
+      attendanceDate: today,
+      eventType: data.eventType,
+      timestamp: punchNow.toISOString(),
+      latitude: data.latitude,
+      longitude: data.longitude,
+      accuracy: data.accuracy || 12,
+      photoUrl: data.photoUrl,
+      breakType: data.breakType || 'LUNCH',
+    };
+
+    events.push(newEvent);
+    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
+
+    let summary = summaries.find((s) => s.employeeId === empId && s.attendanceDate === today);
+
+    let newStatus = 'PRESENT';
+    if (data.eventType === 'CHECK_IN') newStatus = 'WORKING';
+    if (data.eventType === 'BREAK_START') newStatus = 'ON_BREAK';
+    if (data.eventType === 'BREAK_END') newStatus = 'WORKING';
+    if (data.eventType === 'CHECK_OUT') newStatus = 'CHECKED_OUT';
+
+    if (!summary) {
+      summary = {
+        _id: `sum_${Date.now()}`,
+        employee: empObj,
+        employeeId: empId,
+        attendanceDate: today,
+        shift,
+        scheduledHours: 9.0,
+        workingHours: data.eventType === 'CHECK_OUT' ? 8.5 : 0,
+        breakDurationMinutes: 0,
+        lateMinutes: 0,
+        earlyLeavingMinutes: 0,
+        overtimeMinutes: 0,
+        status: newStatus,
+        firstCheckIn: punchNow.toISOString(),
+        lastCheckOut: data.eventType === 'CHECK_OUT' ? punchNow.toISOString() : null,
+        activeBreakStart: data.eventType === 'BREAK_START' ? punchNow.toISOString() : null,
+        events: [newEvent],
+      };
+      summaries.push(summary);
+    } else {
+      summary.status = newStatus;
+      summary.events.push(newEvent);
+      if (data.eventType === 'BREAK_START') {
+        summary.activeBreakStart = punchNow.toISOString();
+      }
+      if (data.eventType === 'BREAK_END') {
+        summary.activeBreakStart = null;
+        summary.breakDurationMinutes = (summary.breakDurationMinutes || 0) + 30;
+      }
+      if (data.eventType === 'CHECK_OUT') {
+        summary.lastCheckOut = punchNow.toISOString();
+        summary.workingHours = 8.5;
+      }
+    }
+
+    localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(summaries));
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        message: `${data.eventType.replace('_', ' ')} recorded successfully!`,
+        data: { summary, event: newEvent },
+      },
+    };
+  }
+
+  // 8. Attendance My History
+  if (url.startsWith('/attendance/my-history') && method === 'get') {
+    const cur = getSavedUser();
+    const empId = cur?.employee?.employeeId || 'EMP101';
+    const mySummaries = summaries.filter((s) => s.employeeId === empId);
+    return { status: 200, data: { success: true, count: mySummaries.length, data: mySummaries } };
+  }
+
+  // 9. Attendance All (Admin)
+  if (url.startsWith('/attendance/all') && method === 'get') {
+    const today = new Date().toISOString().split('T')[0];
+    const totalEmployees = employees.length;
+    const presentToday = summaries.filter((s) => ['PRESENT', 'WORKING', 'ON_BREAK', 'CHECKED_OUT', 'LATE', 'HALF_DAY'].includes(s.status)).length;
+    const lateToday = summaries.filter((s) => s.lateMinutes > 0).length;
+    const onBreak = summaries.filter((s) => s.status === 'ON_BREAK').length;
+    const missingPunch = summaries.filter((s) => s.status === 'MISSING_PUNCH').length;
+    const overtime = summaries.filter((s) => s.overtimeMinutes > 0).length;
+    const absentToday = Math.max(0, totalEmployees - presentToday);
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        date: today,
+        kpis: {
+          totalEmployees,
+          presentToday,
+          absentToday,
+          lateToday,
+          onBreak,
+          missingPunch,
+          overtime,
+        },
+        data: summaries,
+      },
+    };
+  }
+
+  // 10. Attendance Adjust
+  if (url.includes('/attendance/adjust/') && method === 'put') {
+    const id = url.split('/attendance/adjust/')[1];
+    const summary = summaries.find((s) => s._id === id);
+    if (summary) {
+      if (data.status) summary.status = data.status;
+      if (data.workingHours !== undefined) summary.workingHours = data.workingHours;
+      localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(summaries));
+      return { status: 200, data: { success: true, message: 'Record adjusted successfully.', data: summary } };
+    }
+  }
+
+  // 11. Reports
+  if (url.startsWith('/reports/') && method === 'get') {
+    const reportType = url.split('/reports/')[1].split('?')[0];
+
+    if (reportType === 'daily') {
+      const formatted = summaries.map((r) => ({
+        date: r.attendanceDate,
+        employeeId: r.employeeId,
+        employeeName: r.employee?.fullName || 'Anita Desai',
+        department: r.employee?.department || 'Quality Assurance',
+        shiftName: r.shift?.shiftName || 'General Day Shift',
+        scheduledStart: '09:30',
+        actualCheckIn: '09:48 AM',
+        scheduledEnd: '18:30',
+        actualCheckOut: '—',
+        breakMinutes: r.breakDurationMinutes,
+        workingHours: r.workingHours,
+        lateMinutes: r.lateMinutes,
+        earlyLeavingMinutes: 0,
+        overtimeMinutes: 0,
+        status: r.status,
+      }));
+      return { status: 200, data: { success: true, count: formatted.length, data: formatted } };
+    }
+
+    if (reportType === 'monthly') {
+      const formatted = employees.map((emp) => ({
+        employeeId: emp.employeeId,
+        fullName: emp.fullName,
+        department: emp.department,
+        designation: emp.designation,
+        shiftName: emp.assignedShift?.shiftName || 'General',
+        totalMonthDays: 30,
+        presentDays: 24,
+        absentDays: 4,
+        halfDays: 2,
+        lateDays: 3,
+        totalEarlyMinutes: 0,
+        totalWorkingHours: 192,
+        totalOvertimeMinutes: 120,
+      }));
+      return { status: 200, data: { success: true, count: formatted.length, data: formatted } };
+    }
+
+    if (reportType === 'late') {
+      const formatted = [
+        {
+          date: new Date().toISOString().split('T')[0],
+          employeeId: 'EMP104',
+          employeeName: 'Anita Desai',
+          department: 'Quality Assurance',
+          shiftName: 'General Day Shift',
+          shiftStart: '09:30',
+          actualCheckIn: '09:48 AM',
+          lateMinutes: 18,
+        },
+      ];
+      return { status: 200, data: { success: true, count: formatted.length, data: formatted } };
+    }
+
+    if (reportType === 'breaks') {
+      const formatted = [
+        {
+          date: new Date().toISOString().split('T')[0],
+          employeeId: 'EMP101',
+          employeeName: 'John Doe',
+          department: 'Engineering',
+          breakType: 'Lunch Break',
+          breakStart: '01:15 PM',
+          breakEnd: '01:45 PM',
+          durationMinutes: 30,
+        },
+      ];
+      return { status: 200, data: { success: true, count: formatted.length, data: formatted } };
+    }
+
+    if (reportType === 'overtime') {
+      const formatted = [
+        {
+          date: new Date().toISOString().split('T')[0],
+          employeeId: 'EMP101',
+          employeeName: 'John Doe',
+          department: 'Engineering',
+          shiftName: 'General Day Shift',
+          scheduledHours: 8,
+          actualWorkingHours: 9.5,
+          overtimeMinutes: 90,
+          overtimeHours: 1.5,
+        },
+      ];
+      return { status: 200, data: { success: true, count: formatted.length, data: formatted } };
+    }
+
+    if (reportType === 'missing-punch') {
+      return { status: 200, data: { success: true, count: 0, data: [] } };
+    }
+  }
+
+  // 12. Audit Logs
+  if (url.startsWith('/audit-logs') && method === 'get') {
+    return { status: 200, data: { success: true, total: auditLogs.length, data: auditLogs } };
+  }
+
+  return { status: 404, data: { success: false, message: `Mock route not found: ${url}` } };
+};
