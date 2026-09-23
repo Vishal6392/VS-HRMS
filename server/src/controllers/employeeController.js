@@ -253,3 +253,54 @@ export const toggleEmployeeStatus = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const adminResetEmployeePassword = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    let user = await User.findOne({ employee: employee._id });
+    if (!user) {
+      user = await User.findOne({ email: employee.email });
+    }
+
+    if (!user) {
+      // Create user account if missing
+      user = await User.create({
+        email: employee.email,
+        password: newPassword,
+        role: 'employee',
+        employee: employee._id,
+        isActive: employee.employmentStatus === 'ACTIVE',
+      });
+      employee.user = user._id;
+      await employee.save();
+    } else {
+      user.password = newPassword;
+      await user.save();
+    }
+
+    await logAudit({
+      req,
+      action: 'ADMIN_PASSWORD_RESET',
+      targetModel: 'Employee',
+      targetId: employee._id,
+      targetIdentifier: `${employee.fullName} (${employee.employeeId})`,
+      details: `Admin reset password for employee ${employee.fullName}`,
+    });
+
+    res.json({
+      success: true,
+      message: `Password successfully updated for ${employee.fullName}.`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

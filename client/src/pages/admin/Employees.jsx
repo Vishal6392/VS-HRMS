@@ -19,6 +19,7 @@ import {
   Briefcase,
   Clock,
   Calendar,
+  KeyRound,
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -33,6 +34,11 @@ export const Employees = () => {
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordTargetEmp, setPasswordTargetEmp] = useState(null);
+  const [targetNewPassword, setTargetNewPassword] = useState('Password@123');
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -137,6 +143,37 @@ export const Employees = () => {
       fetchEmployees();
     } catch (err) {
       console.error('Failed to toggle status:', err);
+    }
+  };
+
+  const handleOpenResetPassword = (emp) => {
+    setPasswordTargetEmp(emp);
+    setTargetNewPassword('Password@123');
+    setPasswordSuccessMsg(null);
+    setFormError(null);
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleSaveResetPassword = async (e) => {
+    e.preventDefault();
+    if (!passwordTargetEmp) return;
+    setIsResettingPassword(true);
+    setFormError(null);
+    try {
+      const res = await api.post(`/employees/${passwordTargetEmp._id}/reset-password`, {
+        newPassword: targetNewPassword,
+      });
+      if (res.data.success) {
+        setPasswordSuccessMsg(res.data.message || 'Password reset successfully!');
+        setTimeout(() => {
+          setIsPasswordModalOpen(false);
+          setPasswordSuccessMsg(null);
+        }, 1500);
+      }
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to reset password.');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -323,6 +360,15 @@ export const Employees = () => {
                           title="Edit details"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenResetPassword(emp)}
+                          className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          title="Reset Employee Password"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
                         </button>
 
                         <button
@@ -625,6 +671,67 @@ export const Employees = () => {
               Save Changes
             </Button>
           </div>
+        </form>
+      </Modal>
+
+      {/* Admin Reset Password Modal */}
+      <Modal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        title="Reset Employee Password"
+        subtitle={`Set new account login credentials for ${passwordTargetEmp?.fullName || ''} (${passwordTargetEmp?.employeeId || ''}).`}
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleSaveResetPassword} className="space-y-4 text-xs">
+          {formError && (
+            <div className="p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg">
+              {formError}
+            </div>
+          )}
+
+          {passwordSuccessMsg ? (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2 font-medium">
+              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>{passwordSuccessMsg}</span>
+            </div>
+          ) : (
+            <>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <div className="font-semibold text-slate-800">{passwordTargetEmp?.fullName}</div>
+                <div className="text-[11px] text-slate-500">
+                  Email: <span className="font-mono text-slate-700">{passwordTargetEmp?.email}</span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  ID: <span className="font-mono text-slate-700">{passwordTargetEmp?.employeeId}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold uppercase text-slate-600 mb-1">
+                  New Password *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={targetNewPassword}
+                  onChange={(e) => setTargetNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm font-semibold text-slate-800"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Employee is password se apne email ya ID ke through login kar payega.
+                </span>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                <Button variant="outline" type="button" onClick={() => setIsPasswordModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" isLoading={isResettingPassword}>
+                  Update Password
+                </Button>
+              </div>
+            </>
+          )}
         </form>
       </Modal>
     </div>

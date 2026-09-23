@@ -11,19 +11,32 @@ const generateToken = (userId) => {
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, identifier } = req.body;
+    const loginQuery = (identifier || email || '').trim();
 
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Please provide both email and password.' });
+    if (!loginQuery || !password) {
+      return res.status(400).json({ success: false, message: 'Please provide both email/employee ID and password.' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).populate({
+    // Try finding by Email first
+    let user = await User.findOne({ email: loginQuery.toLowerCase() }).populate({
       path: 'employee',
       populate: { path: 'assignedShift' },
     });
 
+    // If not found by email, try finding Employee by employeeId
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      const emp = await Employee.findOne({ employeeId: loginQuery.toUpperCase() });
+      if (emp && emp.user) {
+        user = await User.findById(emp.user).populate({
+          path: 'employee',
+          populate: { path: 'assignedShift' },
+        });
+      }
+    }
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid email/employee ID or password.' });
     }
 
     if (!user.isActive) {
@@ -32,7 +45,7 @@ export const login = async (req, res) => {
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      return res.status(401).json({ success: false, message: 'Invalid email/employee ID or password.' });
     }
 
     user.lastLogin = new Date();
@@ -60,6 +73,97 @@ export const login = async (req, res) => {
         role: user.role,
         employee: user.employee,
       },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const verifyForgotPassword = async (req, res) => {
+  try {
+    const { identifier, mobile } = req.body;
+    const cleanId = (identifier || '').trim();
+    const cleanMobile = (mobile || '').replace(/\D/g, '');
+
+    if (!cleanId) {
+      return res.status(400).json({ success: false, message: 'Please provide Email or Employee ID.' });
+    }
+
+    let user = await User.findOne({ email: cleanId.toLowerCase() }).populate('employee');
+    if (!user) {
+      const emp = await Employee.findOne({ employeeId: cleanId.toUpperCase() }).populate('assignedShift');
+      if (emp && emp.user) {
+        user = await User.findById(emp.user).populate('employee');
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No registered account found with this Email or Employee ID.' });
+    }
+
+    const emp = user.employee;
+    if (emp && cleanMobile) {
+      const empMobileDigits = (emp.mobile || '').replace(/\D/g, '');
+      if (empMobileDigits && !empMobileDigits.endsWith(cleanMobile.slice(-4)) && !empMobileDigits.includes(cleanMobile)) {
+        return res.status(400).json({ success: false, message: 'Mobile number does not match registered employee records.' });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Identity verified successfully.',
+      user: {
+        fullName: emp ? emp.fullName : user.email,
+        employeeId: emp ? emp.employeeId : 'ADMIN',
+        email: user.email,
+        department: emp ? emp.department : 'Administration',
+        mobileMasked: emp?.mobile ? emp.mobile.slice(0, 4) + '••••' + emp.mobile.slice(-4) : 'Verified',
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const resetForgotPassword = async (req, res) => {
+  try {
+    const { identifier, newPassword } = req.body;
+    const cleanId = (identifier || '').trim();
+
+    if (!cleanId || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Please provide identifier and new password.' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+    }
+
+    let user = await User.findOne({ email: cleanId.toLowerCase() });
+    if (!user) {
+      const emp = await Employee.findOne({ employeeId: cleanId.toUpperCase() });
+      if (emp && emp.user) {
+        user = await User.findById(emp.user);
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found.' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    await logAudit({
+      req,
+      performedBy: user._id,
+      performedByName: user.email,
+      action: 'PASSWORD_RESET',
+      details: `Password reset via self-service verification for ${user.email}`,
+    });
+
+    res.json({
+      success: true,
+      message: 'Password successfully updated! You can now log in with your new password.',
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

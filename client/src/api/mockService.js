@@ -229,6 +229,35 @@ function initMockStorage() {
     localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(initialAudit));
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   }
+
+  // Auto-heal: Ensure all employees have a corresponding login in USERS
+  try {
+    const emps = JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || '[]');
+    const usrs = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    let usersUpdated = false;
+
+    emps.forEach((emp) => {
+      const emailLower = emp.email?.toLowerCase().trim();
+      const hasUser = usrs.some((u) => u.email?.toLowerCase().trim() === emailLower);
+      if (!hasUser && emailLower) {
+        usrs.push({
+          _id: `usr_${emp._id || Date.now()}`,
+          email: emp.email,
+          password: emp.password || 'Password@123',
+          role: emp.role || 'employee',
+          employee: emp,
+          isActive: true,
+        });
+        usersUpdated = true;
+      }
+    });
+
+    if (usersUpdated) {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(usrs));
+    }
+  } catch (e) {
+    console.warn('Auto-heal check error:', e);
+  }
 }
 
 initMockStorage();
@@ -255,13 +284,29 @@ export const mockHandleRequest = async (config) => {
     }
   };
 
-  // 1. Auth Login
+  // 1. Auth Login (Supports Email OR Employee ID)
   if (url === '/auth/login' && method === 'post') {
-    const { email, password } = data;
-    const user = users.find((u) => u.email.toLowerCase() === (email || '').toLowerCase().trim());
+    const { email, password, identifier } = data;
+    const loginQuery = (identifier || email || '').toLowerCase().trim();
+
+    const user = users.find((u) => {
+      const emailMatch = u.email?.toLowerCase().trim() === loginQuery;
+      const empIdMatch = u.employee?.employeeId?.toLowerCase().trim() === loginQuery;
+      return emailMatch || empIdMatch;
+    });
 
     if (!user || user.password !== password) {
-      return { status: 401, data: { success: false, message: 'Invalid email or password.' } };
+      return {
+        status: 401,
+        data: {
+          success: false,
+          message: 'Invalid credentials. Please check your email/employee ID and password.',
+        },
+      };
+    }
+
+    if (!user.isActive) {
+      return { status: 403, data: { success: false, message: 'Account is deactivated. Contact HR.' } };
     }
 
     return {
@@ -280,6 +325,90 @@ export const mockHandleRequest = async (config) => {
     };
   }
 
+  // 1b. Forgot Password - Identity Verification
+  if (url === '/auth/forgot-password/verify' && method === 'post') {
+    const { identifier, mobile } = data;
+    const cleanId = (identifier || '').toLowerCase().trim();
+    const cleanMobile = (mobile || '').replace(/\D/g, '');
+
+    const user = users.find((u) => {
+      const emailMatch = u.email?.toLowerCase().trim() === cleanId;
+      const empIdMatch = u.employee?.employeeId?.toLowerCase().trim() === cleanId;
+      return emailMatch || empIdMatch;
+    });
+
+    if (!user) {
+      return {
+        status: 404,
+        data: {
+          success: false,
+          message: 'No registered employee or user found with this Email or Employee ID.',
+        },
+      };
+    }
+
+    const emp = user.employee || employees.find((e) => e.email?.toLowerCase().trim() === user.email?.toLowerCase().trim());
+
+    if (emp && cleanMobile) {
+      const empMobileDigits = (emp.mobile || '').replace(/\D/g, '');
+      if (empMobileDigits && !empMobileDigits.endsWith(cleanMobile.slice(-4)) && !empMobileDigits.includes(cleanMobile)) {
+        return {
+          status: 400,
+          data: {
+            success: false,
+            message: 'Mobile number does not match company records for this employee.',
+          },
+        };
+      }
+    }
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        message: 'Identity verified successfully.',
+        user: {
+          fullName: emp?.fullName || user.email,
+          employeeId: emp?.employeeId || 'ADMIN',
+          email: user.email,
+          department: emp?.department || 'Management',
+          mobileMasked: emp?.mobile ? emp.mobile.slice(0, 4) + '••••' + emp.mobile.slice(-4) : 'Verified',
+        },
+      },
+    };
+  }
+
+  // 1c. Forgot Password - Reset Execution
+  if (url === '/auth/forgot-password/reset' && method === 'post') {
+    const { identifier, newPassword } = data;
+    const cleanId = (identifier || '').toLowerCase().trim();
+
+    if (!newPassword || newPassword.length < 6) {
+      return { status: 400, data: { success: false, message: 'Password must be at least 6 characters.' } };
+    }
+
+    const user = users.find((u) => {
+      const emailMatch = u.email?.toLowerCase().trim() === cleanId;
+      const empIdMatch = u.employee?.employeeId?.toLowerCase().trim() === cleanId;
+      return emailMatch || empIdMatch;
+    });
+
+    if (!user) {
+      return { status: 404, data: { success: false, message: 'User account not found.' } };
+    }
+
+    user.password = newPassword;
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        message: 'Password successfully updated! You can now log in with your new password.',
+      },
+    };
+  }
+
   // 2. Auth Me
   if (url === '/auth/me' && method === 'get') {
     const cur = getSavedUser();
@@ -288,6 +417,14 @@ export const mockHandleRequest = async (config) => {
 
   // 3. Auth Change Password
   if (url === '/auth/change-password' && method === 'post') {
+    const cur = getSavedUser();
+    if (cur && cur.email) {
+      const u = users.find((x) => x.email?.toLowerCase() === cur.email?.toLowerCase());
+      if (u) {
+        u.password = data.newPassword;
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      }
+    }
     return { status: 200, data: { success: true, message: 'Password updated successfully.' } };
   }
 
@@ -334,7 +471,43 @@ export const mockHandleRequest = async (config) => {
     };
     employees.push(newEmp);
     localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
+
+    // ALSO CREATE USER LOGIN ACCOUNT
+    const newUser = {
+      _id: `usr_${newEmp._id}`,
+      email: newEmp.email,
+      password: data.password || 'Password@123',
+      role: data.role || 'employee',
+      employee: newEmp,
+      isActive: true,
+    };
+    users.push(newUser);
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+
     return { status: 201, data: { success: true, message: 'Employee created.', data: newEmp } };
+  }
+  if (url.includes('/employees/') && url.includes('/reset-password') && method === 'post') {
+    const id = url.split('/employees/')[1].split('/')[0];
+    const emp = employees.find((e) => e._id === id || e.employeeId === id);
+    if (emp) {
+      const u = users.find(
+        (usr) =>
+          usr.email?.toLowerCase().trim() === emp.email?.toLowerCase().trim() ||
+          usr.employee?.employeeId === emp.employeeId
+      );
+      if (u) {
+        u.password = data.newPassword || 'Password@123';
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+        return {
+          status: 200,
+          data: {
+            success: true,
+            message: `Password reset successfully to: ${u.password}`,
+          },
+        };
+      }
+    }
+    return { status: 404, data: { success: false, message: 'Employee user account not found.' } };
   }
   if (url.includes('/employees/') && method === 'put') {
     const id = url.split('/employees/')[1];

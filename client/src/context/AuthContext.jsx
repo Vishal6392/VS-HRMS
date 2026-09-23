@@ -37,8 +37,12 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password });
+  const login = async (identifierOrEmail, password) => {
+    const res = await api.post('/auth/login', {
+      email: identifierOrEmail,
+      identifier: identifierOrEmail,
+      password,
+    });
     if (res.data.success) {
       const { token: newToken, user: newUser } = res.data;
       setToken(newToken);

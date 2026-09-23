@@ -5,6 +5,7 @@ import {
   createEmployee,
   updateEmployee,
   toggleEmployeeStatus,
+  adminResetEmployeePassword,
 } from '../controllers/employeeController.js';
 import { protect, requireRole } from '../middleware/auth.js';
 
@@ -19,5 +20,6 @@ router.get('/:id', getEmployeeById);
 router.post('/', requireRole('admin'), createEmployee);
 router.put('/:id', requireRole('admin'), updateEmployee);
 router.patch('/:id/toggle-status', requireRole('admin'), toggleEmployeeStatus);
+router.post('/:id/reset-password', requireRole('admin'), adminResetEmployeePassword);
 
 export default router;
