@@ -20,7 +20,10 @@ export const getDailyReport = async (req, res) => {
       records = records.filter((r) => r.employee?.department === department);
     }
 
-    const formatted = records.map((r) => ({
+    const adminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    const formatted = records
+      .filter((r) => r.employeeId !== 'ADM001' && r.employee?.email !== adminEmail)
+      .map((r) => ({
       date: r.attendanceDate,
       employeeId: r.employee?.employeeId || r.employeeId,
       employeeName: r.employee?.fullName || 'N/A',
@@ -54,7 +57,12 @@ export const getMonthlyReport = async (req, res) => {
     const monthStr = String(targetMonth).padStart(2, '0');
     const startPattern = `^${targetYear}-${monthStr}`;
 
-    const empQuery = { employmentStatus: 'ACTIVE' };
+    const adminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    const empQuery = {
+      employmentStatus: 'ACTIVE',
+      employeeId: { $ne: 'ADM001' },
+      email: { $ne: adminEmail },
+    };
     if (department) empQuery.department = department;
     if (employeeId) empQuery._id = employeeId;
 

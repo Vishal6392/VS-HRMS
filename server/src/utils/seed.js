@@ -9,6 +9,7 @@ import Employee from '../models/Employee.js';
 import Shift from '../models/Shift.js';
 import AuditLog from '../models/AuditLog.js';
 import { connectDB, closeDB } from '../config/db.js';
+import { syncSuperAdminFromEnv } from './syncSuperAdmin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,37 +72,8 @@ export const seedDatabase = async () => {
       console.log('✅ Created Hospitality Split Shift master.');
     }
 
-    // 2. Ensure SuperAdmin exists (without overwriting if already created or renamed)
-    let adminUser = await User.findOne({ role: 'admin' });
-    if (!adminUser) {
-      adminUser = await User.create({
-        email: 'admin@hrms.local',
-        password: 'Admin@123',
-        role: 'admin',
-        isActive: true,
-      });
-
-      const adminEmployee = await Employee.create({
-        employeeId: 'ADM001',
-        fullName: 'Super Admin',
-        mobile: '+91 98765 00001',
-        email: 'admin@hrms.local',
-        department: 'Human Resources',
-        designation: 'Head of People Operations',
-        joiningDate: new Date('2022-01-15'),
-        reportingManager: 'Executive Management',
-        assignedShift: generalShift._id,
-        employmentStatus: 'ACTIVE',
-        user: adminUser._id,
-      });
-
-      adminUser.employee = adminEmployee._id;
-      await adminUser.save();
-
-      console.log('✅ Initialized SuperAdmin: admin@hrms.local / Admin@123');
-    } else {
-      console.log('ℹ️ SuperAdmin account already exists. Preserving current admin details.');
-    }
+    // 2. Synchronize SuperAdmin from Environment Variables (no dummy Employee record)
+    await syncSuperAdminFromEnv();
 
     console.log('✨ HRMS system verified. No dummy employees created.');
   } catch (error) {

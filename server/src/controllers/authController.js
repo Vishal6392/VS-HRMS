@@ -71,6 +71,7 @@ export const login = async (req, res) => {
         _id: user._id,
         email: user.email,
         role: user.role,
+        fullName: user.role === 'admin' ? (process.env.SUPERADMIN_NAME || 'Super Admin') : (user.employee ? user.employee.fullName : user.email),
         employee: user.employee,
       },
     });
@@ -99,6 +100,14 @@ export const verifyForgotPassword = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'No registered account found with this Email or Employee ID.' });
+    }
+
+    // SuperAdmin credentials cannot be reset from public UI
+    if (user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'SuperAdmin credentials cannot be reset from this form. Please update SUPERADMIN_PASSWORD in Render Environment Variables.',
+      });
     }
 
     const emp = user.employee;
@@ -150,6 +159,14 @@ export const resetForgotPassword = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User account not found.' });
     }
 
+    // SuperAdmin is protected from public UI reset
+    if (user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'SuperAdmin credentials are securely managed via Render Environment Variables (SUPERADMIN_PASSWORD). Direct reset from website UI is disabled for security.',
+      });
+    }
+
     user.password = newPassword;
     await user.save();
 
@@ -177,12 +194,17 @@ export const getMe = async (req, res) => {
       populate: { path: 'assignedShift' },
     });
 
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
     res.json({
       success: true,
       user: {
         _id: user._id,
         email: user.email,
         role: user.role,
+        fullName: user.role === 'admin' ? (process.env.SUPERADMIN_NAME || 'Super Admin') : (user.employee ? user.employee.fullName : user.email),
         employee: user.employee,
       },
     });
@@ -200,6 +222,13 @@ export const changePassword = async (req, res) => {
 
     if (newPassword.length < 6) {
       return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+    }
+
+    if (req.user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'SuperAdmin password is managed directly via Render Environment Variables (SUPERADMIN_PASSWORD).',
+      });
     }
 
     const user = await User.findById(req.user._id);

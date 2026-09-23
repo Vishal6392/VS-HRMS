@@ -28,6 +28,7 @@ process.env.TZ = process.env.TIMEZONE || 'Asia/Kolkata';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import { startPhotoCleanupJob } from './services/photoCleanupService.js';
+import { syncSuperAdminFromEnv } from './utils/syncSuperAdmin.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,14 +36,17 @@ const PORT = process.env.PORT || 5000;
 // Connect to Database
 await connectDB();
 
+// Ensure SuperAdmin credentials from Environment Variables (Render) are synced and detached from Employee records
+await syncSuperAdminFromEnv();
+
 // Start automated 40-day photo retention cleanup routine
 startPhotoCleanupJob();
 
 // Auto-seed if database is completely empty
 try {
   const userCount = await User.countDocuments();
-  if (userCount === 0) {
-    console.log('🔄 Fresh database detected. Running automatic initial seed...');
+  if (userCount <= 1) {
+    // Only SuperAdmin or empty DB, run seed for base shifts
     await seedDatabase();
   }
 } catch (seedErr) {
@@ -81,11 +85,21 @@ app.use('/api/audit-logs', auditRoutes);
 
 // In production, serve Vite client build from client/dist (for Render deployment)
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
+const assetsDistPath = path.resolve(clientDistPath, 'assets');
+
+// Explicit static handlers for /assets and any nested relative asset requests
+app.use('/assets', express.static(assetsDistPath));
+app.use('*/assets', express.static(assetsDistPath));
 app.use(express.static(clientDistPath));
 
+// SPA Catch-all: Route all other requests to index.html for client-side routing
 app.get('*', (req, res, next) => {
   if (req.originalUrl.startsWith('/api')) {
     return next();
+  }
+  // If the request looks like a static asset (.js, .css, .ico, .png, etc.) and reached here, return 404 instead of index.html
+  if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|map)$/i.test(req.path)) {
+    return res.status(404).end();
   }
   res.sendFile(path.join(clientDistPath, 'index.html'), (err) => {
     if (err) {

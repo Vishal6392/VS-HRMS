@@ -99,7 +99,7 @@ export const AdminLayout = () => {
           <div className="flex items-center justify-between">
             <div className="truncate">
               <div className="text-xs font-semibold text-white truncate">
-                {user?.employee?.fullName || user?.email || 'HR Administrator'}
+                {user?.fullName || user?.employee?.fullName || user?.email || 'Super Admin'}
               </div>
               <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

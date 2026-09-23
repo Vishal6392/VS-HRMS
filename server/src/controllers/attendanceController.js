@@ -328,16 +328,25 @@ export const getAllAttendance = async (req, res) => {
       );
     }
 
-    // Also get list of all active employees to know who is absent
-    const allEmployees = await Employee.find({ employmentStatus: 'ACTIVE' })
-      .populate('assignedShift');
+    // Also get list of all active employees to know who is absent (excluding SuperAdmin)
+    const adminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    const allEmployees = await Employee.find({
+      employmentStatus: 'ACTIVE',
+      employeeId: { $ne: 'ADM001' },
+      email: { $ne: adminEmail },
+    }).populate('assignedShift');
+
+    // Filter out any legacy admin summary records
+    const cleanSummaries = summaries.filter(
+      (s) => s.employeeId !== 'ADM001' && s.employee?.email !== adminEmail
+    );
 
     const totalActive = allEmployees.length;
-    const presentCount = summaries.filter((s) => ['PRESENT', 'LATE', 'WORKING', 'ON_BREAK', 'CHECKED_OUT', 'HALF_DAY'].includes(s.status)).length;
-    const lateCount = summaries.filter((s) => s.lateMinutes > 0).length;
-    const onBreakCount = summaries.filter((s) => s.status === 'ON_BREAK').length;
-    const missingPunchCount = summaries.filter((s) => s.status === 'MISSING_PUNCH').length;
-    const overtimeCount = summaries.filter((s) => s.overtimeMinutes > 0).length;
+    const presentCount = cleanSummaries.filter((s) => ['PRESENT', 'LATE', 'WORKING', 'ON_BREAK', 'CHECKED_OUT', 'HALF_DAY'].includes(s.status)).length;
+    const lateCount = cleanSummaries.filter((s) => s.lateMinutes > 0).length;
+    const onBreakCount = cleanSummaries.filter((s) => s.status === 'ON_BREAK').length;
+    const missingPunchCount = cleanSummaries.filter((s) => s.status === 'MISSING_PUNCH').length;
+    const overtimeCount = cleanSummaries.filter((s) => s.overtimeMinutes > 0).length;
     const absentCount = Math.max(0, totalActive - presentCount);
 
     res.json({
@@ -352,7 +361,7 @@ export const getAllAttendance = async (req, res) => {
         missingPunch: missingPunchCount,
         overtime: overtimeCount,
       },
-      data: summaries,
+      data: cleanSummaries,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

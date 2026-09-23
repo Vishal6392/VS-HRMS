@@ -60,20 +60,7 @@ const DEFAULT_SHIFTS = [
   },
 ];
 
-const DEFAULT_EMPLOYEES = [
-  {
-    _id: 'emp_admin',
-    employeeId: 'ADM001',
-    fullName: 'Super Admin',
-    mobile: '+91 98765 00001',
-    email: 'admin@hrms.local',
-    department: 'Human Resources',
-    designation: 'Head of People Operations',
-    joiningDate: '2022-01-15T00:00:00.000Z',
-    assignedShift: DEFAULT_SHIFTS[0],
-    employmentStatus: 'ACTIVE',
-  },
-];
+const DEFAULT_EMPLOYEES = [];
 
 const DEFAULT_USERS = [
   {
@@ -81,7 +68,7 @@ const DEFAULT_USERS = [
     email: 'admin@hrms.local',
     password: 'Admin@123',
     role: 'admin',
-    employee: DEFAULT_EMPLOYEES[0],
+    employee: null,
     isActive: true,
   },
 ];
@@ -90,33 +77,29 @@ const samplePhoto = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/
 
 function initMockStorage() {
   const currentVer = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
-  if (currentVer !== 'v4_clean') {
-    // Preserve any custom admin name if already modified by the user
-    let savedAdminName = 'Super Admin';
+  if (currentVer !== 'v5_clean') {
+    // Keep custom employees created by user, but filter out legacy ADM001 employee
+    let existingEmps = [];
     try {
-      const existingEmps = JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || '[]');
-      const adm = existingEmps.find((e) => e.employeeId === 'ADM001' || e.email === 'admin@hrms.local');
-      if (adm && adm.fullName && !adm.fullName.includes('Vikram Singh')) {
-        savedAdminName = adm.fullName;
-      }
+      existingEmps = JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || '[]')
+        .filter((e) => e.employeeId !== 'ADM001' && e.email !== 'admin@hrms.local');
     } catch {}
 
-    const cleanAdminEmp = { ...DEFAULT_EMPLOYEES[0], fullName: savedAdminName };
-    const cleanAdminUser = { ...DEFAULT_USERS[0], employee: cleanAdminEmp };
+    const cleanAdminUser = { ...DEFAULT_USERS[0] };
 
     localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(DEFAULT_SHIFTS));
-    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify([cleanAdminEmp]));
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(existingEmps));
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([cleanAdminUser]));
     localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify([]));
     localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'v4_clean');
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'v5_clean');
 
     // Also update saved user session if present
     try {
       const curUser = JSON.parse(localStorage.getItem('hrms_user') || 'null');
-      if (curUser && curUser.email === 'admin@hrms.local') {
-        curUser.employee = cleanAdminEmp;
+      if (curUser && (curUser.email === 'admin@hrms.local' || curUser.role === 'admin')) {
+        curUser.employee = null;
         localStorage.setItem('hrms_user', JSON.stringify(curUser));
       }
     } catch {}
@@ -256,6 +239,16 @@ export const mockHandleRequest = async (config) => {
       };
     }
 
+    if (user.role === 'admin') {
+      return {
+        status: 403,
+        data: {
+          success: false,
+          message: 'SuperAdmin credentials cannot be reset from this form. Please update SUPERADMIN_PASSWORD in Render Environment Variables.',
+        },
+      };
+    }
+
     const emp = user.employee || employees.find((e) => e.email?.toLowerCase().trim() === user.email?.toLowerCase().trim());
 
     if (emp && cleanMobile) {
@@ -277,10 +270,10 @@ export const mockHandleRequest = async (config) => {
         success: true,
         message: 'Identity verified successfully.',
         user: {
-          fullName: emp?.fullName || user.email,
+          fullName: emp?.fullName || 'Super Admin',
           employeeId: emp?.employeeId || 'ADMIN',
           email: user.email,
-          department: emp?.department || 'Management',
+          department: emp?.department || 'Administration',
           mobileMasked: emp?.mobile ? emp.mobile.slice(0, 4) + '••••' + emp.mobile.slice(-4) : 'Verified',
         },
       },
@@ -304,6 +297,16 @@ export const mockHandleRequest = async (config) => {
 
     if (!user) {
       return { status: 404, data: { success: false, message: 'User account not found.' } };
+    }
+
+    if (user.role === 'admin') {
+      return {
+        status: 403,
+        data: {
+          success: false,
+          message: 'SuperAdmin credentials are securely managed via Render Environment Variables (SUPERADMIN_PASSWORD). Reset from website UI is disabled for security.',
+        },
+      };
     }
 
     user.password = newPassword;

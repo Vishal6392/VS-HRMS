@@ -16,3 +16,9 @@ services:
         sync: false
       - key: TZ
         value: Asia/Kolkata
+      - key: SUPERADMIN_EMAIL
+        value: admin@hrms.local
+      - key: SUPERADMIN_PASSWORD
+        value: Admin@123
+      - key: SUPERADMIN_NAME
+        value: Super Admin

@@ -14,13 +14,21 @@ export const getEmployees = async (req, res) => {
     if (shift) query.assignedShift = shift;
     if (status) query.employmentStatus = status;
 
+    const adminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    query.employeeId = { $ne: 'ADM001' };
+    query.email = { $ne: adminEmail };
+
     if (search) {
       const searchRegex = new RegExp(search.trim(), 'i');
-      query.$or = [
-        { fullName: searchRegex },
-        { employeeId: searchRegex },
-        { email: searchRegex },
-        { designation: searchRegex },
+      query.$and = [
+        {
+          $or: [
+            { fullName: searchRegex },
+            { employeeId: searchRegex },
+            { email: searchRegex },
+            { designation: searchRegex },
+          ],
+        },
       ];
     }
 
