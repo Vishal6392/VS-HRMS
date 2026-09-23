@@ -191,9 +191,9 @@ export const Login = () => {
           </div>
         </div>
 
-        {/* Security watermark footer */}
-        <div className="text-center mt-6 text-xs text-slate-400">
-          Protected by HTTPS &bull; Geofenced Audit &bull; Live Camera Verification
+        {/* Footer Branding */}
+        <div className="text-center mt-6 text-xs font-semibold text-slate-500 tracking-wide">
+          Powered by Vishal
         </div>
       </div>
     </div>

@@ -1,5 +1,11 @@
 import mongoose from 'mongoose';
+import dns from 'dns';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+
+// Ensure SRV records resolve cleanly on all networks
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4']);
+} catch (e) {}
 
 let mongoMemoryServer = null;
 
@@ -15,7 +21,7 @@ export const connectDB = async () => {
     }
 
     const conn = await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 8000,
+      serverSelectionTimeoutMS: 12000,
     });
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host} / Database: ${conn.connection.name}`);

@@ -18,8 +18,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS & Editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+# Scripts and tokens
+scripts/
+.github_token
+*.token
