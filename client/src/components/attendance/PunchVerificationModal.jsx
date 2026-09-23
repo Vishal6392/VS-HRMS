@@ -59,32 +59,69 @@ export const PunchVerificationModal = ({
     };
   }, [isOpen]);
 
-  const detectLocation = () => {
+  const detectLocation = async () => {
     setIsLocating(true);
-    if (!navigator.geolocation) {
+    setErrorMessage(null);
+
+    if (navigator.geolocation) {
+      // Step 1: Request browser location (Fast mode first)
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocationData({
+            latitude: Number(pos.coords.latitude.toFixed(6)),
+            longitude: Number(pos.coords.longitude.toFixed(6)),
+            accuracy: Math.round(pos.coords.accuracy || 10),
+          });
+          setLocationSource('Live Device GPS');
+          setIsLocating(false);
+
+          // Step 1b: Try high-precision refinement
+          navigator.geolocation.getCurrentPosition(
+            (highPos) => {
+              setLocationData({
+                latitude: Number(highPos.coords.latitude.toFixed(6)),
+                longitude: Number(highPos.coords.longitude.toFixed(6)),
+                accuracy: Math.round(highPos.coords.accuracy || 5),
+              });
+              setLocationSource('High-Precision GPS');
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 8000 }
+          );
+        },
+        async (err) => {
+          console.warn('Browser GPS permission/timeout:', err.message);
+
+          // Step 2: Fallback to real Network IP Geolocation
+          try {
+            const ipRes = await fetch('https://ipapi.co/json/');
+            if (ipRes.ok) {
+              const ipData = await ipRes.json();
+              if (ipData.latitude && ipData.longitude) {
+                setLocationData({
+                  latitude: Number(Number(ipData.latitude).toFixed(6)),
+                  longitude: Number(Number(ipData.longitude).toFixed(6)),
+                  accuracy: 45,
+                });
+                setLocationSource(`Network (${ipData.city || 'Local Area'})`);
+                setIsLocating(false);
+                return;
+              }
+            }
+          } catch (ipErr) {
+            console.warn('IP Geo fallback failed:', ipErr.message);
+          }
+
+          // Step 3: Retain safe default
+          setLocationSource('Default Geofence');
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+      );
+    } else {
       setIsLocating(false);
       setLocationSource('Default Geofence');
-      return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocationData({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy || 12,
-        });
-        setLocationSource('Live GPS Locked');
-        setIsLocating(false);
-      },
-      (err) => {
-        console.warn('Geolocation query warning:', err.message);
-        // Retain fallback coordinates so user is NEVER blocked
-        setLocationSource('Default Geofence');
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-    );
   };
 
   const startCamera = async () => {
@@ -263,42 +300,69 @@ export const PunchVerificationModal = ({
       maxWidth="max-w-md"
     >
       <div className="flex flex-col items-center text-xs">
-        {/* 1. Location Status Bar (Answers Point 3 requirement to confirm location) */}
-        <div className="w-full bg-slate-50 border border-slate-200/90 rounded-xl p-3 mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <MapPin className="w-4 h-4" />
+        {/* 1. Location Status Bar */}
+        <div className="w-full bg-slate-50 border border-slate-200/90 rounded-xl p-3 mb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wide flex items-center gap-1.5">
+                  <span>GPS Location</span>
+                  <span className="text-emerald-700 font-normal">({locationSource})</span>
+                </div>
+                <div className="text-xs font-bold text-slate-800 font-mono flex items-center gap-1.5 mt-0.5">
+                  {isLocating ? (
+                    <span className="text-brand-600 animate-pulse font-sans flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Detecting coordinates...
+                    </span>
+                  ) : (
+                    <span>
+                      {locationData.latitude.toFixed(5)}, {locationData.longitude.toFixed(5)}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wide">
-                GPS Location Detected
-              </div>
-              <div className="text-xs font-bold text-slate-800 font-mono flex items-center gap-1.5 mt-0.5">
-                {isLocating ? (
-                  <span className="text-brand-600 animate-pulse font-sans">
-                    Detecting coordinates...
-                  </span>
-                ) : (
-                  <span>
-                    {locationData.latitude.toFixed(4)}, {locationData.longitude.toFixed(4)}
-                  </span>
-                )}
-              </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={detectLocation}
+                disabled={isLocating}
+                className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-200/60 rounded-lg transition-colors"
+                title="Refresh GPS Location"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-brand-600' : ''}`} />
+              </button>
+
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  isLocating
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+              >
+                <ShieldCheck className="w-3 h-3" />
+                {isLocating ? 'Locating...' : `±${Math.round(locationData.accuracy)}m`}
+              </span>
             </div>
           </div>
 
-          <div className="text-right">
-            <span
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                isLocating
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}
-            >
-              <ShieldCheck className="w-3 h-3" />
-              {isLocating ? 'Locating...' : `±${Math.round(locationData.accuracy)}m Locked`}
-            </span>
-          </div>
+          {!isLocating && (
+            <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400">
+              <span>Verified for audit & attendance records</span>
+              <a
+                href={`https://www.google.com/maps?q=${locationData.latitude},${locationData.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand-600 hover:text-brand-800 hover:underline font-medium"
+              >
+                Verify on Google Maps ↗
+              </a>
+            </div>
+          )}
         </div>
 
         {/* 2. Camera Viewfinder Area */}

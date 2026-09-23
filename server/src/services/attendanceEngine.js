@@ -50,39 +50,67 @@ export const getShiftScheduledMinutes = (shift) => {
   return end - start;
 };
 
+// Timezone-aware minute extractor (defaults to Asia/Kolkata)
+export const getLocalMinutes = (dateInput, timeZone = process.env.TIMEZONE || 'Asia/Kolkata') => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(d);
+    const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10);
+    return hour * 60 + minute;
+  } catch (e) {
+    return d.getHours() * 60 + d.getMinutes();
+  }
+};
+
+// Timezone-aware date string extractor (YYYY-MM-DD)
+export const getLocalDateYMD = (dateInput, timeZone = process.env.TIMEZONE || 'Asia/Kolkata') => {
+  if (!dateInput) return '';
+  const d = new Date(dateInput);
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(d);
+    const yr = parts.find((p) => p.type === 'year')?.value;
+    const mo = parts.find((p) => p.type === 'month')?.value;
+    const da = parts.find((p) => p.type === 'day')?.value;
+    return `${yr}-${mo}-${da}`;
+  } catch (e) {
+    return d.toISOString().split('T')[0];
+  }
+};
+
 /**
  * Determines whether a punch at a given Date belongs to today's shift
  * or yesterday's night shift.
  */
 export const getShiftDateForPunch = (punchDate, shift) => {
-  const d = new Date(punchDate);
-  const hours = d.getHours();
-  const minutes = d.getMinutes();
-  const punchMinutes = hours * 60 + minutes;
-
-  // Format date as YYYY-MM-DD
-  const formatYMD = (dateObj) => {
-    const yr = dateObj.getFullYear();
-    const mo = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const da = String(dateObj.getDate()).padStart(2, '0');
-    return `${yr}-${mo}-${da}`;
-  };
+  const punchMinutes = getLocalMinutes(punchDate);
+  const localYMD = getLocalDateYMD(punchDate);
 
   if (!shift || shift.shiftType !== 'NIGHT') {
-    return formatYMD(d);
+    return localYMD;
   }
 
   // For night shift (e.g. 22:00 to 06:00):
   // If punch happens in early morning (e.g. before 12:00 noon), it belongs to yesterday's shift start!
-  const shiftEndMinutes = timeToMinutes(shift.endTime); // e.g. 360 (06:00)
-  // Give a 4-hour window after shift end for check-out
+  const shiftEndMinutes = timeToMinutes(shift.endTime);
   if (punchMinutes <= shiftEndMinutes + 240) {
-    const yesterday = new Date(d);
+    const yesterday = new Date(punchDate);
     yesterday.setDate(yesterday.getDate() - 1);
-    return formatYMD(yesterday);
+    return getLocalDateYMD(yesterday);
   }
 
-  return formatYMD(d);
+  return localYMD;
 };
 
 /**
@@ -91,8 +119,7 @@ export const getShiftDateForPunch = (punchDate, shift) => {
 export const calculateLateMinutes = (firstCheckIn, shift, attendanceDateStr) => {
   if (!firstCheckIn || !shift) return 0;
 
-  const checkInDate = new Date(firstCheckIn);
-  const checkInMinutes = checkInDate.getHours() * 60 + checkInDate.getMinutes();
+  const checkInMinutes = getLocalMinutes(firstCheckIn);
 
   let shiftStartMinutes = timeToMinutes(shift.startTime);
   const grace = shift.gracePeriodMinutes || 0;
@@ -101,9 +128,29 @@ export const calculateLateMinutes = (firstCheckIn, shift, attendanceDateStr) => 
     shiftStartMinutes = timeToMinutes(shift.splitSegments[0].startTime);
   }
 
+  // Handle Night Shift (e.g. 22:00 to 06:00)
+  if (shift.shiftType === 'NIGHT') {
+    let effectiveCheckIn = checkInMinutes;
+    if (checkInMinutes < shiftStartMinutes - 300) {
+      // Past midnight check-in
+      effectiveCheckIn += 1440;
+    }
+    const allowed = shiftStartMinutes + grace;
+    if (effectiveCheckIn > allowed) {
+      return effectiveCheckIn - shiftStartMinutes;
+    }
+    return 0;
+  }
+
+  // General Day Shift (e.g. 09:30 to 18:30)
   const allowedStartMinutes = shiftStartMinutes + grace;
+  const shiftEndMinutes = timeToMinutes(shift.endTime);
 
   if (checkInMinutes > allowedStartMinutes) {
+    // If check-in happened after shift ended, cap late minutes at full shift scheduled duration
+    if (checkInMinutes > shiftEndMinutes) {
+      return Math.min(checkInMinutes - shiftStartMinutes, shiftEndMinutes - shiftStartMinutes);
+    }
     return checkInMinutes - shiftStartMinutes;
   }
   return 0;

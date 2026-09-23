@@ -23,10 +23,12 @@ export const punchAttendance = async (req, res) => {
       });
     }
 
-    if (!photoUrl) {
+    // Photo verification is strictly required for CHECK_IN and CHECK_OUT only (breaks do not require selfie)
+    const requiresPhoto = eventType === 'CHECK_IN' || eventType === 'CHECK_OUT';
+    if (requiresPhoto && (!photoUrl || photoUrl.trim() === '')) {
       return res.status(400).json({
         success: false,
-        message: 'Live photo verification is required to mark attendance.',
+        message: 'Live photo verification is required for Check In and Check Out.',
       });
     }
 

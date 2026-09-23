@@ -15,7 +15,9 @@ import Button from '../common/Button';
 import PunchVerificationModal from './PunchVerificationModal';
 
 export const PunchActionCard = ({ summary, shift, onPunchSuccess }) => {
-  const [activePunchType, setActivePunchType] = useState(null); // 'CHECK_IN' | 'BREAK_START' | 'BREAK_END' | 'CHECK_OUT'
+  const [activePunchType, setActivePunchType] = useState(null); // 'CHECK_IN' | 'CHECK_OUT'
+  const [isBreakSubmitting, setIsBreakSubmitting] = useState(false);
+  const [breakError, setBreakError] = useState(null);
 
   const currentStatus = summary?.status || 'ABSENT';
   const hasCheckedIn = summary && summary.firstCheckIn;
@@ -31,6 +33,48 @@ export const PunchActionCard = ({ summary, shift, onPunchSuccess }) => {
 
   const handleCloseVerification = () => {
     setActivePunchType(null);
+  };
+
+  // Lunch break punch (1-Click instant punch with GPS, NO selfie camera required)
+  const handleBreakPunch = async (eventType) => {
+    setIsBreakSubmitting(true);
+    setBreakError(null);
+
+    let lat = 28.6139;
+    let lng = 77.2090;
+    let acc = 15;
+
+    try {
+      if (navigator.geolocation) {
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: false,
+            timeout: 4000,
+            maximumAge: 60000,
+          });
+        });
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        acc = pos.coords.accuracy || 12;
+      }
+    } catch (e) {
+      console.warn('GPS query fallback for lunch break:', e.message);
+    }
+
+    try {
+      await onPunchSuccess({
+        eventType,
+        latitude: lat,
+        longitude: lng,
+        accuracy: acc,
+        photoUrl: '', // No selfie needed for lunch breaks
+        breakType: 'LUNCH',
+      });
+    } catch (err) {
+      setBreakError(err.response?.data?.message || 'Failed to record break.');
+    } finally {
+      setIsBreakSubmitting(false);
+    }
   };
 
   return (
@@ -119,7 +163,8 @@ export const PunchActionCard = ({ summary, shift, onPunchSuccess }) => {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => handleOpenVerification('BREAK_START')}
+                onClick={() => handleBreakPunch('BREAK_START')}
+                isLoading={isBreakSubmitting}
                 icon={Coffee}
                 className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 shadow-blue-500/20 font-bold"
               >
@@ -143,7 +188,8 @@ export const PunchActionCard = ({ summary, shift, onPunchSuccess }) => {
             <Button
               variant="primary"
               size="xl"
-              onClick={() => handleOpenVerification('BREAK_END')}
+              onClick={() => handleBreakPunch('BREAK_END')}
+              isLoading={isBreakSubmitting}
               icon={CheckCircle2}
               className="w-full text-base py-4 bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20 shadow-lg font-bold"
             >
@@ -151,6 +197,12 @@ export const PunchActionCard = ({ summary, shift, onPunchSuccess }) => {
             </Button>
           )}
         </div>
+
+        {breakError && (
+          <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+            {breakError}
+          </div>
+        )}
 
         {/* Verification badges */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">

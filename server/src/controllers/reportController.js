@@ -273,3 +273,46 @@ export const getMissingPunchReport = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const getLocationAuditReport = async (req, res) => {
+  try {
+    const { date, startDate, endDate, department, employeeId } = req.query;
+    const query = {};
+
+    if (date) {
+      query.attendanceDate = date;
+    } else if (startDate && endDate) {
+      query.attendanceDate = { $gte: startDate, $lte: endDate };
+    }
+
+    let events = await AttendanceEvent.find(query)
+      .populate('employee', 'employeeId fullName department designation')
+      .sort({ timestamp: -1 })
+      .limit(300);
+
+    if (department) {
+      events = events.filter((e) => e.employee?.department === department);
+    }
+    if (employeeId) {
+      events = events.filter((e) => e.employee?.employeeId === employeeId || e.employeeId === employeeId);
+    }
+
+    const formatted = events.map((e) => ({
+      date: e.attendanceDate,
+      time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      employeeId: e.employee?.employeeId || e.employeeId,
+      employeeName: e.employee?.fullName || 'N/A',
+      department: e.employee?.department || 'N/A',
+      eventType: e.eventType,
+      latitude: e.latitude,
+      longitude: e.longitude,
+      accuracyMeters: e.accuracy || 10,
+      mapUrl: `https://www.google.com/maps?q=${e.latitude},${e.longitude}`,
+      hasPhoto: Boolean(e.photoUrl),
+    }));
+
+    res.json({ success: true, count: formatted.length, data: formatted });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

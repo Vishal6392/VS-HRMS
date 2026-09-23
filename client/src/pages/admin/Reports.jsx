@@ -17,11 +17,13 @@ import {
   AlertTriangle,
   Flame,
   Loader2,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
 export const Reports = () => {
-  const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'monthly' | 'late' | 'breaks' | 'overtime' | 'missing-punch'
+  const [activeTab, setActiveTab] = useState('daily'); // 'daily' | 'monthly' | 'late' | 'breaks' | 'overtime' | 'missing-punch' | 'location'
   const [reportData, setReportData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,6 +36,7 @@ export const Reports = () => {
   const tabs = [
     { id: 'daily', label: 'Daily Attendance', icon: Calendar },
     { id: 'monthly', label: 'Monthly Summary', icon: FileBarChart },
+    { id: 'location', label: 'GPS Location Audit', icon: MapPin },
     { id: 'late', label: 'Late Coming', icon: Clock },
     { id: 'breaks', label: 'Break Details', icon: Coffee },
     { id: 'overtime', label: 'Overtime Hours', icon: Flame },
@@ -272,10 +275,25 @@ export const Reports = () => {
               <tbody className="divide-y divide-slate-100">
                 {reportData.map((row, rIdx) => (
                   <tr key={rIdx} className="hover:bg-slate-50/60 transition-colors">
-                    {Object.values(row).map((val, cIdx) => (
+                    {Object.entries(row).map(([k, val], cIdx) => (
                       <td key={cIdx} className="py-3 px-3 text-slate-700">
-                        {typeof val === 'number' ? (
-                          <span className="font-mono font-semibold">{val}</span>
+                        {typeof val === 'string' && val.startsWith('http') ? (
+                          <a
+                            href={val}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 text-brand-700 font-semibold text-[11px] transition-colors"
+                          >
+                            <MapPin className="w-3 h-3 text-brand-600" />
+                            <span>View on Maps</span>
+                            <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                          </a>
+                        ) : typeof val === 'number' ? (
+                          <span className="font-mono font-semibold">
+                            {k.toLowerCase().includes('lat') || k.toLowerCase().includes('long')
+                              ? val.toFixed(5)
+                              : val}
+                          </span>
                         ) : (
                           String(val ?? '—')
                         )}

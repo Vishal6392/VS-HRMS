@@ -6,6 +6,7 @@ import {
   getBreakReport,
   getOvertimeReport,
   getMissingPunchReport,
+  getLocationAuditReport,
 } from '../controllers/reportController.js';
 import { protect, requireRole } from '../middleware/auth.js';
 
@@ -20,5 +21,6 @@ router.get('/late', getLateReport);
 router.get('/breaks', getBreakReport);
 router.get('/overtime', getOvertimeReport);
 router.get('/missing-punch', getMissingPunchReport);
+router.get('/location', getLocationAuditReport);
 
 export default router;

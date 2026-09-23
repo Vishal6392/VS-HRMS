@@ -258,6 +258,23 @@ function initMockStorage() {
   } catch (e) {
     console.warn('Auto-heal check error:', e);
   }
+
+  // Auto-cleanup photos older than 40 days to preserve storage
+  try {
+    const evts = JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]');
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 40);
+    let photoCleaned = false;
+    evts.forEach((ev) => {
+      if (new Date(ev.timestamp) < cutoff && ev.photoUrl) {
+        ev.photoUrl = '';
+        photoCleaned = true;
+      }
+    });
+    if (photoCleaned) {
+      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(evts));
+    }
+  } catch (e) {}
 }
 
 initMockStorage();
@@ -558,6 +575,7 @@ export const mockHandleRequest = async (config) => {
     const shift = empObj.assignedShift || shifts[0];
 
     const punchNow = new Date();
+    const isCheckInOut = data.eventType === 'CHECK_IN' || data.eventType === 'CHECK_OUT';
     const newEvent = {
       _id: `ev_${Date.now()}`,
       employee: empObj,
@@ -568,7 +586,7 @@ export const mockHandleRequest = async (config) => {
       latitude: data.latitude,
       longitude: data.longitude,
       accuracy: data.accuracy || 12,
-      photoUrl: data.photoUrl,
+      photoUrl: isCheckInOut ? data.photoUrl : '',
       breakType: data.breakType || 'LUNCH',
     };
 
@@ -583,6 +601,23 @@ export const mockHandleRequest = async (config) => {
     if (data.eventType === 'BREAK_END') newStatus = 'WORKING';
     if (data.eventType === 'CHECK_OUT') newStatus = 'CHECKED_OUT';
 
+    let lateMins = 0;
+    if (data.eventType === 'CHECK_IN' && shift) {
+      const punchMins = punchNow.getHours() * 60 + punchNow.getMinutes();
+      const [sh, sm] = (shift.startTime || '09:30').split(':').map(Number);
+      const shiftStartMins = sh * 60 + sm;
+      const grace = shift.gracePeriodMinutes || 15;
+      if (punchMins > shiftStartMins + grace) {
+        const [eh, em] = (shift.endTime || '18:30').split(':').map(Number);
+        const shiftEndMins = eh * 60 + em;
+        if (shift.shiftType !== 'NIGHT' && punchMins > shiftEndMins) {
+          lateMins = Math.min(punchMins - shiftStartMins, shiftEndMins - shiftStartMins);
+        } else {
+          lateMins = punchMins - shiftStartMins;
+        }
+      }
+    }
+
     if (!summary) {
       summary = {
         _id: `sum_${Date.now()}`,
@@ -593,10 +628,10 @@ export const mockHandleRequest = async (config) => {
         scheduledHours: 9.0,
         workingHours: data.eventType === 'CHECK_OUT' ? 8.5 : 0,
         breakDurationMinutes: 0,
-        lateMinutes: 0,
+        lateMinutes: lateMins,
         earlyLeavingMinutes: 0,
         overtimeMinutes: 0,
-        status: newStatus,
+        status: lateMins > 0 ? 'LATE' : newStatus,
         firstCheckIn: punchNow.toISOString(),
         lastCheckOut: data.eventType === 'CHECK_OUT' ? punchNow.toISOString() : null,
         activeBreakStart: data.eventType === 'BREAK_START' ? punchNow.toISOString() : null,
@@ -776,6 +811,26 @@ export const mockHandleRequest = async (config) => {
 
     if (reportType === 'missing-punch') {
       return { status: 200, data: { success: true, count: 0, data: [] } };
+    }
+
+    if (reportType === 'location') {
+      const formatted = events.slice(-50).reverse().map((ev) => {
+        const emp = employees.find((e) => e.employeeId === ev.employeeId) || ev.employee;
+        return {
+          date: ev.attendanceDate,
+          time: new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          employeeId: ev.employeeId,
+          employeeName: emp?.fullName || 'Anita Desai',
+          department: emp?.department || 'Quality Assurance',
+          eventType: ev.eventType,
+          latitude: ev.latitude,
+          longitude: ev.longitude,
+          accuracyMeters: ev.accuracy || 12,
+          mapUrl: `https://www.google.com/maps?q=${ev.latitude},${ev.longitude}`,
+          hasPhoto: Boolean(ev.photoUrl),
+        };
+      });
+      return { status: 200, data: { success: true, count: formatted.length, data: formatted } };
     }
   }
 

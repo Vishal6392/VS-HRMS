@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Shield,
   Lock,
   Mail,
   ArrowRight,
   AlertCircle,
   Building2,
-  Moon,
-  Split,
-  Sun,
   User,
   Phone,
   CheckCircle2,
@@ -74,12 +70,6 @@ export const Login = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickLogin = (demoIdentifier, demoPassword) => {
-    setIdentifier(demoIdentifier);
-    setPassword(demoPassword);
-    setErrorMessage(null);
   };
 
   const openForgotModal = () => {
@@ -251,62 +241,6 @@ export const Login = () => {
               Sign In to Account
             </Button>
           </form>
-
-          {/* Quick Demo Login Preset Buttons */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2 text-center">
-              Quick One-Click Demo Logins
-            </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@hrms.local', 'Admin@123')}
-                className="p-2.5 bg-slate-50 hover:bg-brand-50 hover:text-brand-700 border border-slate-200 rounded-xl text-left transition-colors flex items-center gap-2 group"
-              >
-                <Shield className="w-4 h-4 text-brand-600 shrink-0" />
-                <div>
-                  <div className="font-semibold text-slate-800 group-hover:text-brand-700">HR Admin</div>
-                  <div className="text-[10px] text-slate-400">SuperAdmin</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('john@hrms.local', 'Emp@123')}
-                className="p-2.5 bg-slate-50 hover:bg-brand-50 hover:text-brand-700 border border-slate-200 rounded-xl text-left transition-colors flex items-center gap-2 group"
-              >
-                <Sun className="w-4 h-4 text-amber-500 shrink-0" />
-                <div>
-                  <div className="font-semibold text-slate-800 group-hover:text-brand-700">John Doe</div>
-                  <div className="text-[10px] text-slate-400">General Shift</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('priya@hrms.local', 'Emp@123')}
-                className="p-2.5 bg-slate-50 hover:bg-brand-50 hover:text-brand-700 border border-slate-200 rounded-xl text-left transition-colors flex items-center gap-2 group"
-              >
-                <Moon className="w-4 h-4 text-indigo-500 shrink-0" />
-                <div>
-                  <div className="font-semibold text-slate-800 group-hover:text-brand-700">Priya Sharma</div>
-                  <div className="text-[10px] text-slate-400">Night Shift</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('rahul@hrms.local', 'Emp@123')}
-                className="p-2.5 bg-slate-50 hover:bg-brand-50 hover:text-brand-700 border border-slate-200 rounded-xl text-left transition-colors flex items-center gap-2 group"
-              >
-                <Split className="w-4 h-4 text-blue-500 shrink-0" />
-                <div>
-                  <div className="font-semibold text-slate-800 group-hover:text-brand-700">Rahul Verma</div>
-                  <div className="text-[10px] text-slate-400">Split Shift</div>
-                </div>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer Branding */}

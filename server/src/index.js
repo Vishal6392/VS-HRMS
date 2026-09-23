@@ -21,14 +21,22 @@ import auditRoutes from './routes/auditRoutes.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Enforce Indian Standard Time (IST) for operational shift calculations
+process.env.TZ = process.env.TIMEZONE || 'Asia/Kolkata';
+
 // Load .env
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+import { startPhotoCleanupJob } from './services/photoCleanupService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Connect to Database
 await connectDB();
+
+// Start automated 40-day photo retention cleanup routine
+startPhotoCleanupJob();
 
 // Auto-seed if database is completely empty
 try {
