@@ -64,60 +64,12 @@ const DEFAULT_EMPLOYEES = [
   {
     _id: 'emp_admin',
     employeeId: 'ADM001',
-    fullName: 'Vikram Singh (HR Lead)',
+    fullName: 'Super Admin',
     mobile: '+91 98765 00001',
     email: 'admin@hrms.local',
     department: 'Human Resources',
     designation: 'Head of People Operations',
     joiningDate: '2022-01-15T00:00:00.000Z',
-    assignedShift: DEFAULT_SHIFTS[0],
-    employmentStatus: 'ACTIVE',
-  },
-  {
-    _id: 'emp_john',
-    employeeId: 'EMP101',
-    fullName: 'John Doe',
-    mobile: '+91 98765 11001',
-    email: 'john@hrms.local',
-    department: 'Engineering',
-    designation: 'Senior Frontend Engineer',
-    joiningDate: '2023-03-01T00:00:00.000Z',
-    assignedShift: DEFAULT_SHIFTS[0],
-    employmentStatus: 'ACTIVE',
-  },
-  {
-    _id: 'emp_priya',
-    employeeId: 'EMP102',
-    fullName: 'Priya Sharma',
-    mobile: '+91 98765 11002',
-    email: 'priya@hrms.local',
-    department: 'Operations',
-    designation: 'Night Operations Lead',
-    joiningDate: '2023-05-15T00:00:00.000Z',
-    assignedShift: DEFAULT_SHIFTS[1],
-    employmentStatus: 'ACTIVE',
-  },
-  {
-    _id: 'emp_rahul',
-    employeeId: 'EMP103',
-    fullName: 'Rahul Verma',
-    mobile: '+91 98765 11003',
-    email: 'rahul@hrms.local',
-    department: 'Logistics',
-    designation: 'Fleet Supervisor',
-    joiningDate: '2023-08-10T00:00:00.000Z',
-    assignedShift: DEFAULT_SHIFTS[2],
-    employmentStatus: 'ACTIVE',
-  },
-  {
-    _id: 'emp_anita',
-    employeeId: 'EMP104',
-    fullName: 'Anita Desai',
-    mobile: '+91 98765 11004',
-    email: 'anita@hrms.local',
-    department: 'Quality Assurance',
-    designation: 'QA Analyst',
-    joiningDate: '2024-01-20T00:00:00.000Z',
     assignedShift: DEFAULT_SHIFTS[0],
     employmentStatus: 'ACTIVE',
   },
@@ -132,102 +84,42 @@ const DEFAULT_USERS = [
     employee: DEFAULT_EMPLOYEES[0],
     isActive: true,
   },
-  {
-    _id: 'usr_john',
-    email: 'john@hrms.local',
-    password: 'Emp@123',
-    role: 'employee',
-    employee: DEFAULT_EMPLOYEES[1],
-    isActive: true,
-  },
-  {
-    _id: 'usr_priya',
-    email: 'priya@hrms.local',
-    password: 'Emp@123',
-    role: 'employee',
-    employee: DEFAULT_EMPLOYEES[2],
-    isActive: true,
-  },
-  {
-    _id: 'usr_rahul',
-    email: 'rahul@hrms.local',
-    password: 'Emp@123',
-    role: 'employee',
-    employee: DEFAULT_EMPLOYEES[3],
-    isActive: true,
-  },
-  {
-    _id: 'usr_anita',
-    email: 'anita@hrms.local',
-    password: 'Emp@123',
-    role: 'employee',
-    employee: DEFAULT_EMPLOYEES[4],
-    isActive: true,
-  },
 ];
 
 const samplePhoto = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%232563eb"/><circle cx="100" cy="80" r="40" fill="%23ffffff"/><path d="M40 180 C40 130 160 130 160 180 Z" fill="%23ffffff"/></svg>';
 
 function initMockStorage() {
-  if (!localStorage.getItem(STORAGE_KEYS.INITIALIZED)) {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterday = yesterdayDate.toISOString().split('T')[0];
+  const currentVer = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
+  if (currentVer !== 'v4_clean') {
+    // Preserve any custom admin name if already modified by the user
+    let savedAdminName = 'Super Admin';
+    try {
+      const existingEmps = JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || '[]');
+      const adm = existingEmps.find((e) => e.employeeId === 'ADM001' || e.email === 'admin@hrms.local');
+      if (adm && adm.fullName && !adm.fullName.includes('Vikram Singh')) {
+        savedAdminName = adm.fullName;
+      }
+    } catch {}
+
+    const cleanAdminEmp = { ...DEFAULT_EMPLOYEES[0], fullName: savedAdminName };
+    const cleanAdminUser = { ...DEFAULT_USERS[0], employee: cleanAdminEmp };
 
     localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(DEFAULT_SHIFTS));
-    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(DEFAULT_EMPLOYEES));
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify([cleanAdminEmp]));
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([cleanAdminUser]));
+    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'v4_clean');
 
-    const initialEvents = [
-      {
-        _id: 'ev_1',
-        employeeId: 'EMP104',
-        attendanceDate: today,
-        eventType: 'CHECK_IN',
-        timestamp: new Date(`${today}T09:48:00`).toISOString(),
-        latitude: 28.6139,
-        longitude: 77.2090,
-        accuracy: 14,
-        photoUrl: samplePhoto,
-      },
-    ];
-
-    const initialSummaries = [
-      {
-        _id: 'sum_anita',
-        employee: DEFAULT_EMPLOYEES[4],
-        employeeId: 'EMP104',
-        attendanceDate: today,
-        shift: DEFAULT_SHIFTS[0],
-        scheduledHours: 9.0,
-        workingHours: 4.5,
-        breakDurationMinutes: 0,
-        lateMinutes: 18,
-        earlyLeavingMinutes: 0,
-        overtimeMinutes: 0,
-        status: 'LATE',
-        firstCheckIn: new Date(`${today}T09:48:00`).toISOString(),
-        lastCheckOut: null,
-        events: [initialEvents[0]],
-      },
-    ];
-
-    const initialAudit = [
-      {
-        _id: 'aud_1',
-        performedByName: 'Vikram Singh (HR Lead)',
-        action: 'SYSTEM_INITIALIZED',
-        targetRecord: { model: 'System', identifier: 'Base HRMS Setup' },
-        details: 'Initial cloud shift masters and employee directory initialized.',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(initialEvents));
-    localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(initialSummaries));
-    localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(initialAudit));
-    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+    // Also update saved user session if present
+    try {
+      const curUser = JSON.parse(localStorage.getItem('hrms_user') || 'null');
+      if (curUser && curUser.email === 'admin@hrms.local') {
+        curUser.employee = cleanAdminEmp;
+        localStorage.setItem('hrms_user', JSON.stringify(curUser));
+      }
+    } catch {}
   }
 
   // Auto-heal: Ensure all employees have a corresponding login in USERS
@@ -527,13 +419,66 @@ export const mockHandleRequest = async (config) => {
     return { status: 404, data: { success: false, message: 'Employee user account not found.' } };
   }
   if (url.includes('/employees/') && method === 'put') {
-    const id = url.split('/employees/')[1];
+    const id = url.split('/employees/')[1].split('?')[0];
     const idx = employees.findIndex((e) => e._id === id);
     if (idx !== -1) {
+      const oldEmail = employees[idx].email;
       employees[idx] = { ...employees[idx], ...data };
       localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
+
+      // Sync changes to User credentials
+      const userIdx = users.findIndex(
+        (u) =>
+          u.email?.toLowerCase().trim() === oldEmail?.toLowerCase().trim() ||
+          u.employee?._id === id ||
+          u.employee?.employeeId === employees[idx].employeeId
+      );
+      if (userIdx !== -1) {
+        if (data.email) users[userIdx].email = data.email.toLowerCase().trim();
+        users[userIdx].employee = { ...users[userIdx].employee, ...employees[idx] };
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+
+        // Update active session if this was the logged-in user
+        const curUser = getSavedUser();
+        if (curUser?._id === users[userIdx]._id || curUser?.email === oldEmail) {
+          localStorage.setItem(
+            'hrms_user',
+            JSON.stringify({ ...curUser, email: users[userIdx].email, employee: employees[idx] })
+          );
+        }
+      }
+
       return { status: 200, data: { success: true, message: 'Employee updated.', data: employees[idx] } };
     }
+  }
+  if (url.includes('/employees/') && method === 'delete') {
+    const id = url.split('/employees/')[1].split('?')[0];
+    const emp = employees.find((e) => e._id === id);
+    if (!emp) {
+      return { status: 404, data: { success: false, message: 'Employee not found.' } };
+    }
+    if (emp.employeeId === 'ADM001' || emp.email === 'admin@hrms.local') {
+      return { status: 400, data: { success: false, message: 'SuperAdmin account cannot be deleted.' } };
+    }
+    const updatedEmployees = employees.filter((e) => e._id !== id);
+    const updatedUsers = users.filter(
+      (u) =>
+        u.email?.toLowerCase().trim() !== emp.email?.toLowerCase().trim() &&
+        u.employee?._id !== id &&
+        u.employee?.employeeId !== emp.employeeId
+    );
+    const updatedEvents = events.filter((ev) => ev.employeeId !== emp.employeeId);
+    const updatedSummaries = summaries.filter((sm) => sm.employeeId !== emp.employeeId);
+
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(updatedEmployees));
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(updatedUsers));
+    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(updatedEvents));
+    localStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(updatedSummaries));
+
+    return {
+      status: 200,
+      data: { success: true, message: `Employee ${emp.fullName} (${emp.employeeId}) deleted successfully.` },
+    };
   }
   if (url.includes('/employees/') && url.includes('/toggle-status')) {
     const id = url.split('/employees/')[1].split('/')[0];
@@ -669,9 +614,65 @@ export const mockHandleRequest = async (config) => {
   // 8. Attendance My History
   if (url.startsWith('/attendance/my-history') && method === 'get') {
     const cur = getSavedUser();
-    const empId = cur?.employee?.employeeId || 'EMP101';
-    const mySummaries = summaries.filter((s) => s.employeeId === empId);
-    return { status: 200, data: { success: true, count: mySummaries.length, data: mySummaries } };
+    const empId = cur?.employee?.employeeId;
+    const urlParams = new URLSearchParams(url.split('?')[1] || '');
+    const month = urlParams.get('month');
+    const year = urlParams.get('year');
+
+    let mySummaries = summaries.filter((s) => !empId || s.employeeId === empId || s.employee?._id === cur?.employee?._id);
+
+    if (month && year) {
+      const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+      mySummaries = mySummaries.filter((s) => s.attendanceDate?.startsWith(monthPrefix));
+    }
+
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+    let halfDays = 0;
+    let totalWorkingHours = 0;
+    let totalOvertimeMinutes = 0;
+    let totalLateMinutes = 0;
+    let totalBreakMinutes = 0;
+
+    mySummaries.forEach((s) => {
+      if (['PRESENT', 'WORKING', 'CHECKED_OUT', 'LATE', 'HALF_DAY'].includes(s.status)) {
+        presentDays++;
+      } else if (s.status === 'ABSENT') {
+        absentDays++;
+      }
+      if (s.status === 'HALF_DAY') halfDays++;
+      if (s.lateMinutes > 0) {
+        lateDays++;
+        totalLateMinutes += s.lateMinutes;
+      }
+      totalWorkingHours += s.workingHours || 0;
+      totalOvertimeMinutes += s.overtimeMinutes || 0;
+      totalBreakMinutes += s.breakDurationMinutes || 0;
+    });
+
+    const onTimePercentage =
+      presentDays > 0 ? Math.max(0, Math.round(((presentDays - lateDays) / presentDays) * 100)) : 100;
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        count: mySummaries.length,
+        kpis: {
+          presentDays,
+          absentDays,
+          lateDays,
+          halfDays,
+          totalWorkingHours: Number(totalWorkingHours.toFixed(1)),
+          totalOvertimeHours: Number((totalOvertimeMinutes / 60).toFixed(1)),
+          totalLateMinutes,
+          totalBreakMinutes,
+          onTimePercentage,
+        },
+        data: mySummaries,
+      },
+    };
   }
 
   // 9. Attendance All (Admin)

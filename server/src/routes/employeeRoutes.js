@@ -4,6 +4,7 @@ import {
   getEmployeeById,
   createEmployee,
   updateEmployee,
+  deleteEmployee,
   toggleEmployeeStatus,
   adminResetEmployeePassword,
 } from '../controllers/employeeController.js';
@@ -19,6 +20,7 @@ router.get('/:id', getEmployeeById);
 // Admin only actions
 router.post('/', requireRole('admin'), createEmployee);
 router.put('/:id', requireRole('admin'), updateEmployee);
+router.delete('/:id', requireRole('admin'), deleteEmployee);
 router.patch('/:id/toggle-status', requireRole('admin'), toggleEmployeeStatus);
 router.post('/:id/reset-password', requireRole('admin'), adminResetEmployeePassword);
 

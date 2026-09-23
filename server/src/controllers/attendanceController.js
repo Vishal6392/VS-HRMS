@@ -208,19 +208,89 @@ export const getTodayAttendance = async (req, res) => {
 
 export const getMyAttendanceHistory = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    const filter = { employee: req.user.employee };
+    const { startDate, endDate, month, year } = req.query;
+    const empId = req.user.employee?._id || req.user.employee;
+    const empCode = req.user.employee?.employeeId;
 
-    if (startDate && endDate) {
-      filter.attendanceDate = { $gte: startDate, $lte: endDate };
+    const filter = {
+      $or: [
+        ...(empId ? [{ employee: empId }] : []),
+        ...(empCode ? [{ employeeId: empCode }] : []),
+      ],
+    };
+
+    if (filter.$or.length === 0) {
+      return res.status(400).json({ success: false, message: 'Employee profile not associated with this account.' });
+    }
+
+    // Handle Month & Year or explicit startDate & endDate
+    let queryStartDate = startDate;
+    let queryEndDate = endDate;
+
+    if (month && year) {
+      const m = Number(month);
+      const y = Number(year);
+      const daysInMonth = new Date(y, m, 0).getDate();
+      queryStartDate = `${y}-${String(m).padStart(2, '0')}-01`;
+      queryEndDate = `${y}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+    }
+
+    if (queryStartDate && queryEndDate) {
+      filter.attendanceDate = { $gte: queryStartDate, $lte: queryEndDate };
     }
 
     const summaries = await AttendanceSummary.find(filter)
       .populate('shift')
-      .populate('events')
+      .populate({
+        path: 'events',
+        options: { sort: { timestamp: 1 } },
+      })
       .sort({ attendanceDate: -1 });
 
-    res.json({ success: true, count: summaries.length, data: summaries });
+    // Calculate aggregated KPIs for the employee
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+    let halfDays = 0;
+    let totalWorkingHours = 0;
+    let totalOvertimeMinutes = 0;
+    let totalLateMinutes = 0;
+    let totalBreakMinutes = 0;
+
+    summaries.forEach((s) => {
+      if (['PRESENT', 'WORKING', 'CHECKED_OUT', 'LATE', 'HALF_DAY'].includes(s.status)) {
+        presentDays++;
+      } else if (s.status === 'ABSENT') {
+        absentDays++;
+      }
+      if (s.status === 'HALF_DAY') halfDays++;
+      if (s.lateMinutes > 0) {
+        lateDays++;
+        totalLateMinutes += s.lateMinutes;
+      }
+      totalWorkingHours += s.workingHours || 0;
+      totalOvertimeMinutes += s.overtimeMinutes || 0;
+      totalBreakMinutes += s.breakDurationMinutes || 0;
+    });
+
+    const onTimePercentage = presentDays > 0 ? Math.max(0, Math.round(((presentDays - lateDays) / presentDays) * 100)) : 100;
+
+    res.json({
+      success: true,
+      count: summaries.length,
+      kpis: {
+        presentDays,
+        absentDays,
+        lateDays,
+        halfDays,
+        totalWorkingHours: Number(totalWorkingHours.toFixed(1)),
+        totalOvertimeHours: Number((totalOvertimeMinutes / 60).toFixed(1)),
+        totalLateMinutes,
+        totalBreakMinutes,
+        onTimePercentage,
+      },
+      data: summaries,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

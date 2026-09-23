@@ -22,18 +22,7 @@ export const cleanupExpiredPhotos = async (retentionDays = 40) => {
       }
     );
 
-    // 2. Clear embedded event photoUrls in AttendanceSummaries older than 40 days
-    const summaryResult = await AttendanceSummary.updateMany(
-      {
-        createdAt: { $lt: cutoffDate },
-        'events.photoUrl': { $nin: ['', null] },
-      },
-      {
-        $set: { 'events.$[].photoUrl': '' },
-      }
-    );
-
-    const totalCleared = eventResult.modifiedCount + summaryResult.modifiedCount;
+    const totalCleared = eventResult.modifiedCount || 0;
     if (totalCleared > 0) {
       console.log(
         `🧹 Auto-cleanup: Removed photo data from ${totalCleared} record(s) older than ${retentionDays} days. (MongoDB storage optimized)`

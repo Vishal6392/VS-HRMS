@@ -20,10 +20,14 @@ import {
   Clock,
   Calendar,
   KeyRound,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { formatDate } from '../../utils/formatters';
 
 export const Employees = () => {
+  const { user, refreshUser } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +39,9 @@ export const Employees = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteTargetEmp, setDeleteTargetEmp] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [passwordTargetEmp, setPasswordTargetEmp] = useState(null);
   const [targetNewPassword, setTargetNewPassword] = useState('Password@123');
   const [passwordSuccessMsg, setPasswordSuccessMsg] = useState(null);
@@ -106,6 +113,7 @@ export const Employees = () => {
     setCurrentEmployee(emp);
     setFormData({
       fullName: emp.fullName,
+      email: emp.email || '',
       mobile: emp.mobile,
       department: emp.department,
       designation: emp.designation,
@@ -129,11 +137,39 @@ export const Employees = () => {
         setIsEditModalOpen(false);
         setCurrentEmployee(null);
         fetchEmployees();
+        // If logged-in user's profile was updated, refresh header & sidebar in real time!
+        if (user?.employee?._id === currentEmployee._id || user?.email === currentEmployee.email) {
+          refreshUser();
+        }
       }
     } catch (err) {
       setFormError(err.response?.data?.message || 'Failed to update employee.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenDelete = (emp) => {
+    setDeleteTargetEmp(emp);
+    setFormError(null);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetEmp) return;
+    setIsDeleting(true);
+    setFormError(null);
+    try {
+      const res = await api.delete(`/employees/${deleteTargetEmp._id}`);
+      if (res.data.success) {
+        setIsDeleteModalOpen(false);
+        setDeleteTargetEmp(null);
+        fetchEmployees();
+      }
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to delete employee.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -376,7 +412,7 @@ export const Employees = () => {
                           onClick={() => handleToggleStatus(emp)}
                           className={`p-1.5 rounded-lg transition-colors ${
                             emp.employmentStatus === 'ACTIVE'
-                              ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50'
+                              ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
                               : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
                           }`}
                           title={
@@ -391,6 +427,18 @@ export const Employees = () => {
                             <CheckCircle className="w-3.5 h-3.5" />
                           )}
                         </button>
+
+                        {/* Delete Button (Protected from deleting SuperAdmin) */}
+                        {emp.employeeId !== 'ADM001' && emp.email !== 'admin@hrms.local' && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDelete(emp)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete employee permanently"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -595,6 +643,19 @@ export const Employees = () => {
 
             <div>
               <label className="block font-semibold uppercase text-slate-600 mb-1">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold uppercase text-slate-600 mb-1">
                 Mobile Number *
               </label>
               <input
@@ -733,6 +794,54 @@ export const Employees = () => {
             </>
           )}
         </form>
+      </Modal>
+
+      {/* Delete Employee Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => !isDeleting && setIsDeleteModalOpen(false)}
+        title="Delete Employee"
+        subtitle="Permanently remove employee profile and credentials."
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          {formError && (
+            <div className="p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg">
+              {formError}
+            </div>
+          )}
+
+          <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-rose-900">
+                Are you sure you want to permanently delete this employee?
+              </p>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                Employee <strong className="text-slate-900">{deleteTargetEmp?.fullName}</strong> (ID: <span className="font-mono">{deleteTargetEmp?.employeeId}</span>) will be removed along with their login credentials and attendance records. This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              disabled={isDeleting}
+              onClick={() => setIsDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              type="button"
+              isLoading={isDeleting}
+              onClick={handleConfirmDelete}
+            >
+              Yes, Delete Permanently
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

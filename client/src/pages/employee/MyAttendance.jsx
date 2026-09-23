@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import api from '../../api/axios';
 import Card from '../../components/common/Card';
+import Button from '../../components/common/Button';
 import StatusBadge from '../../components/common/StatusBadge';
 import Modal from '../../components/common/Modal';
 import AttendanceTimeline from '../../components/attendance/AttendanceTimeline';
@@ -11,6 +13,7 @@ import {
   ChevronRight,
   Loader2,
   CalendarCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   formatDate,
@@ -41,6 +44,25 @@ export const MyAttendance = () => {
     fetchHistory();
   }, []);
 
+  const handleExportExcel = () => {
+    if (!history || history.length === 0) return;
+    const exportRows = history.map((r) => ({
+      'Date': r.attendanceDate,
+      'Shift': r.shift?.shiftName || 'General Shift',
+      'Check In': r.firstCheckIn ? formatTime(r.firstCheckIn) : '—',
+      'Check Out': r.lastCheckOut ? formatTime(r.lastCheckOut) : '—',
+      'Break (Min)': r.breakDurationMinutes || 0,
+      'Working Hours': r.workingHours ? Number(r.workingHours.toFixed(2)) : 0,
+      'Late (Min)': r.lateMinutes || 0,
+      'Overtime (Min)': r.overtimeMinutes || 0,
+      'Status': r.status,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'My Attendance');
+    XLSX.writeFile(workbook, `My_Attendance_History_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   if (isLoading) {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-slate-400">
@@ -57,6 +79,18 @@ export const MyAttendance = () => {
           <h2 className="text-lg font-bold text-slate-900">My Attendance History</h2>
           <p className="text-xs text-slate-500">Review your past punches and working hours.</p>
         </div>
+
+        {history.length > 0 && (
+          <Button
+            variant="success"
+            size="sm"
+            icon={FileSpreadsheet}
+            onClick={handleExportExcel}
+            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+          >
+            Download Excel
+          </Button>
+        )}
       </div>
 
       {history.length === 0 ? (

@@ -1,6 +1,8 @@
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
 import Shift from '../models/Shift.js';
+import AttendanceEvent from '../models/AttendanceEvent.js';
+import AttendanceSummary from '../models/AttendanceSummary.js';
 import { logAudit } from '../services/auditService.js';
 
 export const getEmployees = async (req, res) => {
@@ -186,6 +188,35 @@ export const updateEmployee = async (req, res) => {
       }
     });
 
+    // Handle email update with uniqueness validation and sync to User account
+    if (req.body.email && req.body.email.toLowerCase().trim() !== employee.email) {
+      const newEmail = req.body.email.toLowerCase().trim();
+
+      const duplicateUser = await User.findOne({
+        email: newEmail,
+        _id: { $ne: employee.user },
+      });
+      const duplicateEmp = await Employee.findOne({
+        email: newEmail,
+        _id: { $ne: employee._id },
+      });
+
+      if (duplicateUser || duplicateEmp) {
+        return res.status(400).json({
+          success: false,
+          message: `Email '${newEmail}' is already registered with another account.`,
+        });
+      }
+
+      employee.email = newEmail;
+
+      // Update User account email as well
+      await User.findOneAndUpdate(
+        { $or: [{ employee: employee._id }, { _id: employee.user }] },
+        { email: newEmail }
+      );
+    }
+
     await employee.save();
 
     // If status changed, sync User account isActive
@@ -213,6 +244,60 @@ export const updateEmployee = async (req, res) => {
       success: true,
       message: 'Employee updated successfully.',
       data: updated,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteEmployee = async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    // Safety: Protect SuperAdmin account from deletion
+    if (employee.employeeId === 'ADM001' || employee.email === 'admin@hrms.local') {
+      return res.status(400).json({ success: false, message: 'SuperAdmin account cannot be deleted.' });
+    }
+
+    const linkedUser = await User.findOne({
+      $or: [{ employee: employee._id }, { email: employee.email }, { _id: employee.user }],
+    });
+
+    if (linkedUser && linkedUser.role === 'admin') {
+      return res.status(400).json({ success: false, message: 'Admin accounts cannot be deleted.' });
+    }
+
+    // 1. Delete associated User account
+    if (linkedUser) {
+      await User.findByIdAndDelete(linkedUser._id);
+    }
+
+    // 2. Delete associated Attendance Events and Summaries
+    await AttendanceEvent.deleteMany({
+      $or: [{ employee: employee._id }, { employeeId: employee.employeeId }],
+    });
+    await AttendanceSummary.deleteMany({
+      $or: [{ employee: employee._id }, { employeeId: employee.employeeId }],
+    });
+
+    // 3. Delete Employee document
+    await Employee.findByIdAndDelete(employee._id);
+
+    await logAudit({
+      req,
+      action: 'EMPLOYEE_DELETED',
+      targetModel: 'Employee',
+      targetId: employee._id,
+      targetIdentifier: `${employee.fullName} (${employee.employeeId})`,
+      details: `Permanently deleted employee profile, login credentials, and attendance data for ${employee.fullName}`,
+    });
+
+    res.json({
+      success: true,
+      message: `Employee ${employee.fullName} (${employee.employeeId}) permanently deleted.`,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

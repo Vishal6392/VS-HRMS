@@ -242,11 +242,6 @@ export const Login = () => {
             </Button>
           </form>
         </div>
-
-        {/* Footer Branding */}
-        <div className="text-center mt-6 text-xs font-semibold text-slate-500 tracking-wide">
-          Powered by Vishal
-        </div>
       </div>
 
       {/* Forgot Password Modal */}
