@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import { logAudit } from '../services/auditService.js';
 
 /**
- * Get all Admin users (Super Admin and Sub-Admins)
+ * Get all Admin users (Super Admin and Admins)
  * Restricted to Super Admin only
  */
 export const getAdminUsers = async (req, res) => {
@@ -18,10 +18,10 @@ export const getAdminUsers = async (req, res) => {
       return {
         _id: user._id,
         email: user.email,
-        name: isSuper ? (process.env.SUPERADMIN_NAME || user.name || 'Super Admin') : (user.name || 'Sub-Admin'),
+        name: isSuper ? (process.env.SUPERADMIN_NAME || user.name || 'Super Admin') : (user.name || 'Admin'),
         role: user.role,
         isSuperAdmin: isSuper,
-        adminType: isSuper ? 'superadmin' : (user.adminType || 'subadmin'),
+        adminType: isSuper ? 'superadmin' : 'admin',
         isActive: user.isActive,
         lastLogin: user.lastLogin,
         createdAt: user.createdAt,
@@ -42,17 +42,17 @@ export const getAdminUsers = async (req, res) => {
 };
 
 /**
- * Create a new Sub-Admin user
+ * Create a new Admin user
  * Restricted to Super Admin only
  */
-export const createSubAdmin = async (req, res) => {
+export const createAdminUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide full name, email, and password for Sub-Admin.',
+        message: 'Please provide full name, email, and password for Admin.',
       });
     }
 
@@ -80,7 +80,7 @@ export const createSubAdmin = async (req, res) => {
       role: 'admin',
       name: name.trim(),
       isSuperAdmin: false,
-      adminType: 'subadmin',
+      adminType: 'admin',
       employee: null,
       isActive: true,
     });
@@ -89,29 +89,29 @@ export const createSubAdmin = async (req, res) => {
 
     await logAudit({
       req,
-      action: 'CREATE_SUBADMIN',
+      action: 'CREATE_ADMIN',
       targetModel: 'User',
       targetId: newSubAdmin._id,
       targetIdentifier: cleanEmail,
-      details: `Super Admin created Sub-Admin: ${name.trim()} (${cleanEmail})`,
+      details: `Super Admin created Admin: ${name.trim()} (${cleanEmail})`,
       afterValue: {
         email: cleanEmail,
         name: name.trim(),
         role: 'admin',
-        adminType: 'subadmin',
+        adminType: 'admin',
       },
     });
 
     res.status(201).json({
       success: true,
-      message: `Sub-Admin '${name.trim()}' created successfully.`,
+      message: `Admin '${name.trim()}' created successfully.`,
       data: {
         _id: newSubAdmin._id,
         email: newSubAdmin.email,
         name: newSubAdmin.name,
         role: newSubAdmin.role,
         isSuperAdmin: false,
-        adminType: 'subadmin',
+        adminType: 'admin',
         isActive: newSubAdmin.isActive,
         createdAt: newSubAdmin.createdAt,
       },
@@ -122,10 +122,10 @@ export const createSubAdmin = async (req, res) => {
 };
 
 /**
- * Toggle Sub-Admin active / inactive status
+ * Toggle Admin active / inactive status
  * Restricted to Super Admin only
  */
-export const toggleSubAdminStatus = async (req, res) => {
+export const toggleAdminStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const superAdminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
@@ -150,11 +150,11 @@ export const toggleSubAdminStatus = async (req, res) => {
 
     await logAudit({
       req,
-      action: 'UPDATE_SUBADMIN_STATUS',
+      action: 'UPDATE_ADMIN_STATUS',
       targetModel: 'User',
       targetId: targetUser._id,
       targetIdentifier: targetUser.email,
-      details: `Sub-Admin ${targetUser.email} status changed to ${targetUser.isActive ? 'Active' : 'Inactive'}`,
+      details: `Admin ${targetUser.email} status changed to ${targetUser.isActive ? 'Active' : 'Inactive'}`,
       afterValue: { isActive: targetUser.isActive },
     });
 
@@ -172,10 +172,10 @@ export const toggleSubAdminStatus = async (req, res) => {
 };
 
 /**
- * Reset Sub-Admin password by Super Admin
+ * Reset Admin password by Super Admin
  * Restricted to Super Admin only
  */
-export const resetSubAdminPassword = async (req, res) => {
+export const resetAdminPassword = async (req, res) => {
   try {
     const { id } = req.params;
     const { newPassword } = req.body;
@@ -208,16 +208,16 @@ export const resetSubAdminPassword = async (req, res) => {
 
     await logAudit({
       req,
-      action: 'RESET_SUBADMIN_PASSWORD',
+      action: 'RESET_ADMIN_PASSWORD',
       targetModel: 'User',
       targetId: targetUser._id,
       targetIdentifier: targetUser.email,
-      details: `Super Admin reset password for Sub-Admin: ${targetUser.email}`,
+      details: `Super Admin reset password for Admin: ${targetUser.email}`,
     });
 
     res.json({
       success: true,
-      message: `Password reset successfully for Sub-Admin '${targetUser.name || targetUser.email}'.`,
+      message: `Password reset successfully for Admin '${targetUser.name || targetUser.email}'.`,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -225,10 +225,10 @@ export const resetSubAdminPassword = async (req, res) => {
 };
 
 /**
- * Delete a Sub-Admin
+ * Delete an Admin
  * Restricted to Super Admin only
  */
-export const deleteSubAdmin = async (req, res) => {
+export const deleteAdminUser = async (req, res) => {
   try {
     const { id } = req.params;
     const superAdminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
@@ -252,16 +252,16 @@ export const deleteSubAdmin = async (req, res) => {
 
     await logAudit({
       req,
-      action: 'DELETE_SUBADMIN',
+      action: 'DELETE_ADMIN',
       targetModel: 'User',
       targetId: id,
       targetIdentifier: targetUser.email,
-      details: `Super Admin deleted Sub-Admin account: ${targetUser.email}`,
+      details: `Super Admin deleted Admin account: ${targetUser.email}`,
     });
 
     res.json({
       success: true,
-      message: `Sub-Admin '${targetUser.name || targetUser.email}' deleted successfully.`,
+      message: `Admin '${targetUser.name || targetUser.email}' deleted successfully.`,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

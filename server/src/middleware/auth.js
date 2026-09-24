@@ -52,7 +52,7 @@ export const requireSuperAdmin = (req, res, next) => {
   if (!isSuper) {
     return res.status(403).json({
       success: false,
-      message: 'Forbidden: Access restricted to Super Admin only. Sub-Admins cannot access this resource.',
+      message: 'Forbidden: Access restricted to Super Admin only. Admins cannot access this resource.',
     });
   }
   next();

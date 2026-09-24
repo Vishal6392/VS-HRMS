@@ -55,7 +55,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// Guard strictly for Super Admin (blocks Sub-Admins from audit logs and admin user management)
+// Guard strictly for Super Admin (blocks Admins from audit logs and admin user management)
 const SuperAdminRoute = ({ children }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;

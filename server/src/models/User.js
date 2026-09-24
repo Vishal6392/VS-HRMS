@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema(
     },
     adminType: {
       type: String,
-      enum: ['superadmin', 'subadmin'],
+      enum: ['superadmin', 'admin', 'subadmin'],
       default: null,
     },
     employee: {

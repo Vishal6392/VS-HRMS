@@ -1,10 +1,10 @@
 import express from 'express';
 import {
   getAdminUsers,
-  createSubAdmin,
-  toggleSubAdminStatus,
-  resetSubAdminPassword,
-  deleteSubAdmin,
+  createAdminUser,
+  toggleAdminStatus,
+  resetAdminPassword,
+  deleteAdminUser,
 } from '../controllers/adminUserController.js';
 import { protect, requireSuperAdmin } from '../middleware/auth.js';
 
@@ -15,9 +15,9 @@ router.use(protect);
 router.use(requireSuperAdmin);
 
 router.get('/', getAdminUsers);
-router.post('/', createSubAdmin);
-router.put('/:id/status', toggleSubAdminStatus);
-router.put('/:id/password', resetSubAdminPassword);
-router.delete('/:id', deleteSubAdmin);
+router.post('/', createAdminUser);
+router.put('/:id/status', toggleAdminStatus);
+router.put('/:id/password', resetAdminPassword);
+router.delete('/:id', deleteAdminUser);
 
 export default router;

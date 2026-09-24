@@ -41,7 +41,7 @@ export const AdminLayout = () => {
     ...(isSuperAdmin
       ? [
           { label: 'Admin Audit Logs', to: '/admin/audit-logs', icon: History },
-          { label: 'Sub-Admin Manager', to: '/admin/admins', icon: UserCog },
+          { label: 'Admin Management', to: '/admin/admins', icon: UserCog },
         ]
       : []),
   ];
@@ -119,7 +119,7 @@ export const AdminLayout = () => {
               </div>
               <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Online ({isSuperAdmin ? 'Super Admin' : 'Sub-Admin'})
+                Online ({isSuperAdmin ? 'Super Admin' : 'Admin'})
               </div>
             </div>
             <button

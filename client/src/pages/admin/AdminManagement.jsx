@@ -27,7 +27,7 @@ export const AdminManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [alert, setAlert] = useState(null);
 
-  // Create Sub-Admin Modal
+  // Create Admin Modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', email: '', password: '' });
   const [createLoading, setCreateLoading] = useState(false);
@@ -75,7 +75,7 @@ export const AdminManagement = () => {
     targetSetter(pass);
   };
 
-  const handleCreateSubAdmin = async (e) => {
+  const handleCreateAdmin = async (e) => {
     e.preventDefault();
     if (!createForm.name || !createForm.email || !createForm.password) {
       setAlert({ type: 'error', message: 'Please fill all required fields.' });
@@ -88,7 +88,7 @@ export const AdminManagement = () => {
       if (res.data.success) {
         setAlert({
           type: 'success',
-          message: `Sub-Admin '${createForm.name}' created successfully.`,
+          message: `Admin '${createForm.name}' created successfully.`,
         });
         setCreateModalOpen(false);
         setCreateForm({ name: '', email: '', password: '' });
@@ -97,7 +97,7 @@ export const AdminManagement = () => {
     } catch (err) {
       setAlert({
         type: 'error',
-        message: err.response?.data?.message || 'Failed to create Sub-Admin.',
+        message: err.response?.data?.message || 'Failed to create Admin.',
       });
     } finally {
       setCreateLoading(false);
@@ -175,7 +175,7 @@ export const AdminManagement = () => {
     } catch (err) {
       setAlert({
         type: 'error',
-        message: err.response?.data?.message || 'Failed to delete Sub-Admin.',
+        message: err.response?.data?.message || 'Failed to delete Admin.',
       });
     } finally {
       setDeleteLoading(false);
@@ -189,8 +189,8 @@ export const AdminManagement = () => {
   );
 
   const totalAdmins = admins.length;
-  const activeSubAdmins = admins.filter((a) => !a.isSuperAdmin && a.isActive).length;
-  const inactiveSubAdmins = admins.filter((a) => !a.isSuperAdmin && !a.isActive).length;
+  const activeAdmins = admins.filter((a) => !a.isSuperAdmin && a.isActive).length;
+  const inactiveAdmins = admins.filter((a) => !a.isSuperAdmin && !a.isActive).length;
 
   return (
     <div className="space-y-6">
@@ -205,10 +205,10 @@ export const AdminManagement = () => {
             <span className="text-xs font-medium text-slate-500">Security & Roles</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            Sub-Admin Management
+            Admin Management
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Create administrative accounts with restricted access (Sub-Admins cannot view Audit Logs).
+            Create administrative accounts with restricted access (Admins cannot view Audit Logs).
           </p>
         </div>
 
@@ -230,7 +230,7 @@ export const AdminManagement = () => {
             className="flex items-center gap-1.5 shadow-sm"
           >
             <UserPlus className="w-4 h-4" />
-            Add Sub-Admin
+            Add Admin
           </Button>
         </div>
       </div>
@@ -273,8 +273,8 @@ export const AdminManagement = () => {
               Role-Based Access Hierarchy Active
             </h3>
             <p className="text-slate-600 leading-relaxed">
-              <strong>Super Admin:</strong> Full operational controls, server environment configuration, and exclusive access to <strong>Admin Audit Logs</strong> and Sub-Admin accounts.<br />
-              <strong>Sub-Admin:</strong> Daily administration (Employees, Shifts, Attendance Live, and Reports). For security and compliance, <strong>Audit Logs are strictly hidden and blocked</strong> for Sub-Admins.
+              <strong>Super Admin:</strong> Full operational controls, server environment configuration, and exclusive access to <strong>Admin Audit Logs</strong> and Admin accounts.<br />
+              <strong>Admin:</strong> Daily administration (Employees, Shifts, Attendance Live, and Reports). For security and compliance, <strong>Audit Logs are strictly hidden and blocked</strong> for Admins.
             </p>
           </div>
         </div>
@@ -306,23 +306,23 @@ export const AdminManagement = () => {
 
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase text-slate-500">Active Sub-Admins</span>
+            <span className="text-xs font-semibold uppercase text-slate-500">Active Admins</span>
             <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-emerald-600 mt-2">{activeSubAdmins}</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-2">{activeAdmins}</div>
           <div className="text-xs text-slate-400 mt-0.5">Active operational admins</div>
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase text-slate-500">Inactive Sub-Admins</span>
+            <span className="text-xs font-semibold uppercase text-slate-500">Inactive Admins</span>
             <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
               <XCircle className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-rose-600 mt-2">{inactiveSubAdmins}</div>
+          <div className="text-2xl font-bold text-rose-600 mt-2">{inactiveAdmins}</div>
           <div className="text-xs text-slate-400 mt-0.5">Suspended administrative access</div>
         </div>
       </div>
@@ -420,7 +420,7 @@ export const AdminManagement = () => {
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                            Sub-Admin
+                            Admin
                           </span>
                         )}
                       </td>
@@ -472,7 +472,7 @@ export const AdminManagement = () => {
                             <button
                               type="button"
                               onClick={() => handleToggleStatus(admin)}
-                              title={admin.isActive ? 'Suspend Sub-Admin' : 'Activate Sub-Admin'}
+                              title={admin.isActive ? 'Suspend Admin' : 'Activate Admin'}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
                                 admin.isActive
                                   ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
@@ -503,7 +503,7 @@ export const AdminManagement = () => {
                                 setAdminToDelete(admin);
                                 setDeleteModalOpen(true);
                               }}
-                              title="Delete Sub-Admin"
+                              title="Delete Admin"
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -520,15 +520,15 @@ export const AdminManagement = () => {
         </div>
       </div>
 
-      {/* Modal 1: Create New Sub-Admin */}
+      {/* Modal 1: Create New Admin */}
       <Modal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        title="Add New Sub-Admin"
+        title="Add New Admin"
         subtitle="Create an operational admin user with restricted audit log access."
         maxWidth="max-w-md"
       >
-        <form onSubmit={handleCreateSubAdmin} className="p-6 space-y-4">
+        <form onSubmit={handleCreateAdmin} className="p-6 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
               Full Name *
@@ -550,7 +550,7 @@ export const AdminManagement = () => {
             <input
               type="email"
               required
-              placeholder="subadmin@hrms.local"
+              placeholder="admin@hrms.local"
               value={createForm.email}
               onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
@@ -596,7 +596,7 @@ export const AdminManagement = () => {
           <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
             <Lock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
             <div>
-              <strong>Security Rule:</strong> Sub-Admins can manage employees, shifts, attendance, and reports, but <strong>Audit Logs</strong> will remain completely inaccessible to them.
+              <strong>Security Rule:</strong> Admins can manage employees, shifts, attendance, and reports, but <strong>Audit Logs</strong> will remain completely inaccessible to them.
             </div>
           </div>
 
@@ -610,7 +610,7 @@ export const AdminManagement = () => {
               Cancel
             </Button>
             <Button variant="primary" size="sm" type="submit" disabled={createLoading}>
-              {createLoading ? 'Creating Sub-Admin...' : 'Save Sub-Admin'}
+              {createLoading ? 'Creating Admin...' : 'Save Admin'}
             </Button>
           </div>
         </form>
@@ -620,7 +620,7 @@ export const AdminManagement = () => {
       <Modal
         isOpen={resetModalOpen}
         onClose={() => setResetModalOpen(false)}
-        title="Reset Sub-Admin Password"
+        title="Reset Admin Password"
         subtitle={`Update credentials for ${selectedAdmin?.name || selectedAdmin?.email}`}
         maxWidth="max-w-md"
       >
@@ -680,12 +680,12 @@ export const AdminManagement = () => {
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         title="Confirm Deletion"
-        subtitle="This action will permanently remove this Sub-Admin account."
+        subtitle="This action will permanently remove this Admin account."
         maxWidth="max-w-md"
       >
         <div className="p-6 space-y-4">
           <p className="text-xs text-slate-600">
-            Are you sure you want to delete the Sub-Admin account for{' '}
+            Are you sure you want to delete the Admin account for{' '}
             <strong className="text-slate-900">{adminToDelete?.name}</strong> ({adminToDelete?.email})?
             This user will no longer be able to log in to AV HRMS.
           </p>
