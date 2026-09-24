@@ -35,43 +35,59 @@ export const PunchActionCard = ({ summary, shift, onPunchSuccess }) => {
     setActivePunchType(null);
   };
 
-  // Lunch break punch (1-Click instant punch with GPS, NO selfie camera required)
+  // Lunch break punch (1-Click instant punch with live GPS, NO selfie camera required)
   const handleBreakPunch = async (eventType) => {
     setIsBreakSubmitting(true);
     setBreakError(null);
 
-    let lat = 28.6139;
-    let lng = 77.2090;
-    let acc = 15;
+    if (!navigator.geolocation) {
+      setBreakError('Geolocation is not supported by your browser.');
+      setIsBreakSubmitting(false);
+      return;
+    }
 
+    let coords;
     try {
-      if (navigator.geolocation) {
-        const pos = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: false,
-            timeout: 4000,
-            maximumAge: 60000,
-          });
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 8000,
+          maximumAge: 0,
         });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-        acc = pos.coords.accuracy || 12;
-      }
+      });
+      coords = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: Math.round(pos.coords.accuracy || 10),
+      };
     } catch (e) {
-      console.warn('GPS query fallback for lunch break:', e.message);
+      let friendlyError = 'Unable to determine your current location. Please try again.';
+      if (e.code === 1) {
+        friendlyError = 'Location permission is required to record break attendance.';
+      } else if (e.code === 2) {
+        friendlyError = 'Unable to determine your location. Please check device GPS and try again.';
+      } else if (e.code === 3) {
+        friendlyError = 'Location request timed out. Please try again.';
+      }
+      setBreakError(friendlyError);
+      setIsBreakSubmitting(false);
+      return;
     }
 
     try {
-      await onPunchSuccess({
+      const result = await onPunchSuccess({
         eventType,
-        latitude: lat,
-        longitude: lng,
-        accuracy: acc,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy,
         photoUrl: '', // No selfie needed for lunch breaks
         breakType: 'LUNCH',
       });
+      if (result && !result.success) {
+        setBreakError(result.message || 'Failed to record break.');
+      }
     } catch (err) {
-      setBreakError(err.response?.data?.message || 'Failed to record break.');
+      setBreakError(err.response?.data?.message || err.message || 'Failed to record break.');
     } finally {
       setIsBreakSubmitting(false);
     }

@@ -139,6 +139,8 @@ export const AttendanceTimeline = ({ events = [], summary = null }) => {
                     longitude={ev.longitude}
                     accuracy={ev.accuracy}
                     timestamp={ev.timestamp}
+                    matchedLocationName={ev.matchedLocationName}
+                    distanceFromLocation={ev.distanceFromLocation}
                   />
 
                   {ev.photoUrl && (

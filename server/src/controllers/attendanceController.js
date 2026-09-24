@@ -5,8 +5,50 @@ import Shift from '../models/Shift.js';
 import {
   getShiftDateForPunch,
   calculateAttendanceSummary,
+  getLocalDateYMD,
 } from '../services/attendanceEngine.js';
 import { logAudit } from '../services/auditService.js';
+import { validateEmployeeGeofence } from '../utils/geofence.js';
+import {
+  loadRosterContext,
+  resolveExpectedSchedule,
+} from '../services/rosterEngine.js';
+
+export const checkPunchLocation = async (req, res) => {
+  try {
+    const { latitude, longitude, accuracy } = req.body;
+
+    const empId = req.user.employee?._id || req.user.employee;
+    let employee = empId ? await Employee.findById(empId) : null;
+    if (!employee) {
+      employee = await Employee.findOne({
+        $or: [{ user: req.user._id }, { email: req.user.email?.toLowerCase().trim() }],
+      });
+    }
+
+    if (!employee) {
+      return res.status(400).json({
+        success: false,
+        message: 'Employee profile not associated with this account.',
+      });
+    }
+
+    const geofenceResult = await validateEmployeeGeofence({
+      employee,
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      accuracy: Number(accuracy) || 0,
+      punchDate: new Date(),
+    });
+
+    res.json({
+      success: true,
+      data: geofenceResult,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 export const punchAttendance = async (req, res) => {
   try {
@@ -32,8 +74,15 @@ export const punchAttendance = async (req, res) => {
       });
     }
 
-    // Get current employee
-    const employee = await Employee.findById(req.user.employee).populate('assignedShift');
+    // Get current employee (supports employee account or admin acting as employee)
+    const empId = req.user.employee?._id || req.user.employee;
+    let employee = empId ? await Employee.findById(empId).populate('assignedShift') : null;
+    if (!employee) {
+      employee = await Employee.findOne({
+        $or: [{ user: req.user._id }, { email: req.user.email?.toLowerCase().trim() }],
+      }).populate('assignedShift');
+    }
+
     if (!employee) {
       return res.status(400).json({ success: false, message: 'Employee profile not associated with this user.' });
     }
@@ -42,12 +91,70 @@ export const punchAttendance = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Your employment status is inactive. Cannot mark attendance.' });
     }
 
-    const shift = employee.assignedShift;
+    const punchNow = new Date();
+    const punchDateStr = getLocalDateYMD(punchNow);
+
+    // Resolve operative shift from Shift Roster if scheduled
+    const rosterCtx = await loadRosterContext({
+      startDate: punchDateStr,
+      endDate: punchDateStr,
+      employeeIds: [employee._id],
+    });
+
+    const expected = resolveExpectedSchedule({
+      employee,
+      dateStr: punchDateStr,
+      rostersMap: rosterCtx.rostersMap,
+      holidaysMap: rosterCtx.holidaysMap,
+      departmentRuleMap: rosterCtx.departmentRuleMap,
+    });
+
+    const shift = expected.shift || employee.assignedShift;
     if (!shift) {
       return res.status(400).json({ success: false, message: 'No shift assigned to employee. Contact HR.' });
     }
 
-    const punchNow = new Date();
+    // -------------------------------------------------------------
+    // STRICT BACKEND GEOFENCE VALIDATION
+    // Independent distance calculation (Haversine) & GPS accuracy check
+    // -------------------------------------------------------------
+    const geofenceResult = await validateEmployeeGeofence({
+      employee,
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      accuracy: Number(accuracy) || 0,
+      punchDate: punchNow,
+    });
+
+    if (!geofenceResult.allowed) {
+      await logAudit({
+        req,
+        action: 'GEOFENCE_ATTENDANCE_BLOCKED',
+        targetModel: 'AttendanceEvent',
+        targetIdentifier: `${employee.fullName} (${eventType})`,
+        details: `Blocked ${eventType} attempt: ${geofenceResult.message}`,
+        afterValue: {
+          employeeId: employee.employeeId,
+          eventType,
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          accuracy: Number(accuracy) || 0,
+          reason: geofenceResult.reason,
+          nearestLocation: geofenceResult.nearestLocation?.locationName || null,
+          distance: geofenceResult.distance || null,
+          allowedRadius: geofenceResult.allowedRadius || null,
+          outsideMeters: geofenceResult.outsideMeters || null,
+        },
+      });
+
+      return res.status(400).json({
+        success: false,
+        geofenceBlocked: true,
+        reason: geofenceResult.reason,
+        message: geofenceResult.message,
+        details: geofenceResult,
+      });
+    }
     const attendanceDate = getShiftDateForPunch(punchNow, shift);
 
     // Fetch existing summary and events for today's shift
@@ -111,7 +218,7 @@ export const punchAttendance = async (req, res) => {
       segmentIndex = eventType === 'CHECK_IN' ? priorCheckIns : Math.max(0, priorCheckIns - 1);
     }
 
-    // Record Attendance Event
+    // Record Attendance Event with Geo-Fence Verification Metadata
     const newEvent = await AttendanceEvent.create({
       employee: employee._id,
       employeeId: employee.employeeId,
@@ -124,6 +231,10 @@ export const punchAttendance = async (req, res) => {
       photoUrl,
       breakType,
       segmentIndex,
+      matchedLocation: geofenceResult.matchedLocation?._id || null,
+      matchedLocationName: geofenceResult.matchedLocationName || '',
+      distanceFromLocation: geofenceResult.distance || 0,
+      geofenceStatus: geofenceResult.geofenceStatus || 'ALLOWED',
       deviceMetadata: {
         userAgent: req.headers['user-agent'] || '',
         ip: req.ip || '',
@@ -169,14 +280,37 @@ export const punchAttendance = async (req, res) => {
 
 export const getTodayAttendance = async (req, res) => {
   try {
-    const employee = await Employee.findById(req.user.employee).populate('assignedShift');
+    const empId = req.user.employee?._id || req.user.employee;
+    let employee = empId ? await Employee.findById(empId).populate('assignedShift') : null;
+    if (!employee) {
+      employee = await Employee.findOne({
+        $or: [{ user: req.user._id }, { email: req.user.email?.toLowerCase().trim() }],
+      }).populate('assignedShift');
+    }
+
     if (!employee) {
       return res.status(400).json({ success: false, message: 'Employee profile not found.' });
     }
 
-    const shift = employee.assignedShift;
     const now = new Date();
-    const todayDate = getShiftDateForPunch(now, shift);
+    const todayDate = getShiftDateForPunch(now, employee.assignedShift);
+
+    // Resolve roster schedule for todayDate
+    const rosterCtx = await loadRosterContext({
+      startDate: todayDate,
+      endDate: todayDate,
+      employeeIds: [employee._id],
+    });
+
+    const expected = resolveExpectedSchedule({
+      employee,
+      dateStr: todayDate,
+      rostersMap: rosterCtx.rostersMap,
+      holidaysMap: rosterCtx.holidaysMap,
+      departmentRuleMap: rosterCtx.departmentRuleMap,
+    });
+
+    const operativeShift = expected.shift || employee.assignedShift;
 
     let summary = await AttendanceSummary.findOne({
       employee: employee._id,
@@ -191,7 +325,18 @@ export const getTodayAttendance = async (req, res) => {
     res.json({
       success: true,
       attendanceDate: todayDate,
-      shift,
+      shift: operativeShift,
+      todaySchedule: {
+        expectedStatus: expected.expectedStatus,
+        shift: operativeShift,
+        isWorkRequired: expected.isWorkRequired,
+        isWeeklyOff: expected.expectedStatus === 'WEEK_OFF',
+        isCompOff: expected.expectedStatus === 'COMP_OFF',
+        isHoliday: expected.expectedStatus === 'HOLIDAY',
+        compOffForDate: expected.compOffForDate || null,
+        holidayName: expected.holiday?.holidayName || null,
+        remarks: expected.remarks || '',
+      },
       employee: {
         _id: employee._id,
         employeeId: employee.employeeId,

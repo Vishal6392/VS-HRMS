@@ -16,17 +16,10 @@ export const syncSuperAdminFromEnv = async () => {
 
     console.log(`🔐 Verifying SuperAdmin credentials from environment for: ${adminEmail}`);
 
-    // 1. Remove any legacy ADM001 / admin employee records from Employee collection
-    const deletedAdminEmps = await Employee.deleteMany({
-      $or: [{ employeeId: 'ADM001' }, { email: adminEmail }],
+    // 1. Check if an Employee profile is linked or exists for this SuperAdmin
+    const existingAdminEmp = await Employee.findOne({
+      $or: [{ email: adminEmail }, { employeeId: 'ADM001' }],
     });
-    if (deletedAdminEmps.deletedCount > 0) {
-      console.log(`ℹ️ Removed ${deletedAdminEmps.deletedCount} legacy admin employee record(s). SuperAdmin is purely an administrator.`);
-    }
-
-    // Also clean any dummy attendance records for ADM001
-    await AttendanceEvent.deleteMany({ employeeId: 'ADM001' });
-    await AttendanceSummary.deleteMany({ employeeId: 'ADM001' });
 
     // 2. Find or create the SuperAdmin User
     let adminUser = await User.findOne({ email: adminEmail });
@@ -42,7 +35,7 @@ export const syncSuperAdminFromEnv = async () => {
         name: adminName,
         isSuperAdmin: true,
         adminType: 'superadmin',
-        employee: null,
+        employee: existingAdminEmp ? existingAdminEmp._id : null,
         isActive: true,
       });
       await adminUser.save();
@@ -54,7 +47,9 @@ export const syncSuperAdminFromEnv = async () => {
       adminUser.name = adminName;
       adminUser.isSuperAdmin = true;
       adminUser.adminType = 'superadmin';
-      adminUser.employee = null;
+      if (!adminUser.employee && existingAdminEmp) {
+        adminUser.employee = existingAdminEmp._id;
+      }
       adminUser.isActive = true;
 
       // Check if password in env has changed or needs update

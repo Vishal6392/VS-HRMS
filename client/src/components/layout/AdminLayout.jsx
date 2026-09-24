@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Users,
   Clock,
+  CalendarDays,
   CalendarCheck,
   FileBarChart,
   History,
@@ -11,6 +12,7 @@ import {
   Building2,
   Menu,
   X,
+  MapPin,
   Shield,
   UserCog,
 } from 'lucide-react';
@@ -32,6 +34,8 @@ export const AdminLayout = () => {
     { label: 'Overview Dashboard', to: '/admin/dashboard', icon: LayoutDashboard },
     { label: 'Employees Master', to: '/admin/employees', icon: Users },
     { label: 'Shift Master', to: '/admin/shifts', icon: Clock },
+    { label: 'Shift Roster', to: '/admin/roster', icon: CalendarDays },
+    { label: 'Location / Geofence', to: '/admin/locations', icon: MapPin },
     { label: 'Attendance Live', to: '/admin/attendance', icon: CalendarCheck },
     { label: 'Reports & Export', to: '/admin/reports', icon: FileBarChart },
     ...(isSuperAdmin

@@ -9,8 +9,12 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
+  Lock,
+  Compass,
+  AlertTriangle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import api from '../../api/axios';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 import { formatTime } from '../../utils/formatters';
@@ -27,12 +31,21 @@ export const PunchVerificationModal = ({
   // States
   const [photoData, setPhotoData] = useState(null);
   const [locationData, setLocationData] = useState({
-    latitude: 28.6139,
-    longitude: 77.2090,
-    accuracy: 15,
+    latitude: 0,
+    longitude: 0,
+    accuracy: 0,
   });
   const [isLocating, setIsLocating] = useState(true);
+  const [locationError, setLocationError] = useState(null);
   const [locationSource, setLocationSource] = useState('GPS Geofence');
+
+  // Server Geofence Check State
+  const [geofenceCheck, setGeofenceCheck] = useState({
+    isLoading: true,
+    result: null, // { allowed, reason, message, matchedLocation, nearestLocation, distance, allowedRadius, outsideMeters, currentAccuracy, requiredAccuracy }
+    error: null,
+  });
+
   const [cameraError, setCameraError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -42,14 +55,12 @@ export const PunchVerificationModal = ({
     if (isOpen) {
       setPhotoData(null);
       setErrorMessage(null);
+      setLocationError(null);
       setIsSuccess(false);
       setIsSubmitting(false);
 
-      // 1. Fetch real GPS Geolocation
+      // Step 1: Detect Location & Validate Geofence (Camera will start ONLY if location is inside approved area)
       detectLocation();
-
-      // 2. Start Camera
-      startCamera();
     } else {
       stopCamera();
     }
@@ -59,69 +70,112 @@ export const PunchVerificationModal = ({
     };
   }, [isOpen]);
 
+  // Real-time server-side geofence verification
+  const validateLocationWithBackend = async (coords) => {
+    setGeofenceCheck((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const res = await api.post('/attendance/check-location', {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy,
+        eventType: actionType,
+      });
+
+      if (res.data.success) {
+        const checkResult = res.data.data;
+        setGeofenceCheck({
+          isLoading: false,
+          result: checkResult,
+          error: null,
+        });
+
+        if (checkResult.allowed) {
+          // Inside allowed geofence -> open camera for selfie verification!
+          startCamera();
+        } else {
+          // Outside allowed geofence or poor accuracy -> do not run camera hardware unnecessarily
+          stopCamera();
+        }
+      }
+    } catch (err) {
+      console.error('Server geofence pre-check failed:', err);
+      const msg = err.response?.data?.message || 'Failed to verify location with server.';
+      setGeofenceCheck({
+        isLoading: false,
+        result: null,
+        error: msg,
+      });
+      stopCamera();
+    }
+  };
+
   const detectLocation = async () => {
     setIsLocating(true);
+    setLocationError(null);
     setErrorMessage(null);
+    setGeofenceCheck({ isLoading: true, result: null, error: null });
 
-    if (navigator.geolocation) {
-      // Step 1: Request browser location (Fast mode first)
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLocationData({
-            latitude: Number(pos.coords.latitude.toFixed(6)),
-            longitude: Number(pos.coords.longitude.toFixed(6)),
-            accuracy: Math.round(pos.coords.accuracy || 10),
-          });
-          setLocationSource('Live Device GPS');
-          setIsLocating(false);
-
-          // Step 1b: Try high-precision refinement
-          navigator.geolocation.getCurrentPosition(
-            (highPos) => {
-              setLocationData({
-                latitude: Number(highPos.coords.latitude.toFixed(6)),
-                longitude: Number(highPos.coords.longitude.toFixed(6)),
-                accuracy: Math.round(highPos.coords.accuracy || 5),
-              });
-              setLocationSource('High-Precision GPS');
-            },
-            () => {},
-            { enableHighAccuracy: true, timeout: 8000 }
-          );
-        },
-        async (err) => {
-          console.warn('Browser GPS permission/timeout:', err.message);
-
-          // Step 2: Fallback to real Network IP Geolocation
-          try {
-            const ipRes = await fetch('https://ipapi.co/json/');
-            if (ipRes.ok) {
-              const ipData = await ipRes.json();
-              if (ipData.latitude && ipData.longitude) {
-                setLocationData({
-                  latitude: Number(Number(ipData.latitude).toFixed(6)),
-                  longitude: Number(Number(ipData.longitude).toFixed(6)),
-                  accuracy: 45,
-                });
-                setLocationSource(`Network (${ipData.city || 'Local Area'})`);
-                setIsLocating(false);
-                return;
-              }
-            }
-          } catch (ipErr) {
-            console.warn('IP Geo fallback failed:', ipErr.message);
-          }
-
-          // Step 3: Retain safe default
-          setLocationSource('Default Geofence');
-          setIsLocating(false);
-        },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
-      );
-    } else {
+    if (!navigator.geolocation) {
       setIsLocating(false);
-      setLocationSource('Default Geofence');
+      const msg = 'Geolocation is not supported by your browser.';
+      setLocationError(msg);
+      setGeofenceCheck({ isLoading: false, result: null, error: msg });
+      stopCamera();
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = {
+          latitude: Number(pos.coords.latitude.toFixed(6)),
+          longitude: Number(pos.coords.longitude.toFixed(6)),
+          accuracy: Math.round(pos.coords.accuracy || 10),
+        };
+
+        setLocationData(coords);
+        setLocationSource('Live Device GPS');
+        setIsLocating(false);
+
+        // Validate coordinates against employee's allowed geofence locations
+        validateLocationWithBackend(coords);
+
+        // Optional: High-precision refinement
+        navigator.geolocation.getCurrentPosition(
+          (highPos) => {
+            const refined = {
+              latitude: Number(highPos.coords.latitude.toFixed(6)),
+              longitude: Number(highPos.coords.longitude.toFixed(6)),
+              accuracy: Math.round(highPos.coords.accuracy || 5),
+            };
+            setLocationData(refined);
+            setLocationSource('High-Precision GPS');
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      },
+      (err) => {
+        setIsLocating(false);
+        stopCamera();
+
+        let friendlyError = 'Unable to determine your current location. Please try again.';
+        if (err.code === 1) {
+          friendlyError = 'Location permission is required to mark attendance. Please enable location permissions in your browser or device settings and try again.';
+        } else if (err.code === 2) {
+          friendlyError = 'Unable to determine your current location. Please verify device GPS or network and try again.';
+        } else if (err.code === 3) {
+          friendlyError = 'Location request timed out. Please check device GPS and try again.';
+        }
+
+        setLocationError(friendlyError);
+        setGeofenceCheck({
+          isLoading: false,
+          result: null,
+          error: friendlyError,
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const startCamera = async () => {
@@ -203,6 +257,11 @@ export const PunchVerificationModal = ({
 
   // Main Action: Capture & Punch Immediately!
   const handleCaptureAndPunch = async (fallbackPhoto = null) => {
+    if (!geofenceCheck.result?.allowed) {
+      setErrorMessage('Cannot confirm attendance: You are outside the allowed attendance area.');
+      return;
+    }
+
     let captured = fallbackPhoto;
     if (!captured) {
       captured = getSnapshotFromVideo();
@@ -241,7 +300,7 @@ export const PunchVerificationModal = ({
         // Auto close after brief celebration
         setTimeout(() => {
           onClose();
-        }, 1100);
+        }, 1200);
       } else {
         setErrorMessage(result?.message || 'Failed to record punch. Please try again.');
         setIsSubmitting(false);
@@ -258,7 +317,9 @@ export const PunchVerificationModal = ({
     setPhotoData(null);
     setErrorMessage(null);
     setIsSubmitting(false);
-    startCamera();
+    if (geofenceCheck.result?.allowed) {
+      startCamera();
+    }
   };
 
   const getTitle = () => {
@@ -291,6 +352,9 @@ export const PunchVerificationModal = ({
     }
   };
 
+  const isLocationVerified = Boolean(geofenceCheck.result?.allowed);
+  const isCheckingLocation = isLocating || geofenceCheck.isLoading;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -300,70 +364,152 @@ export const PunchVerificationModal = ({
       maxWidth="max-w-md"
     >
       <div className="flex flex-col items-center text-xs">
-        {/* 1. Location Status Bar */}
-        <div className="w-full bg-slate-50 border border-slate-200/90 rounded-xl p-3 mb-3">
-          <div className="flex items-center justify-between">
+        {/* 1. Location Status Section */}
+        {isCheckingLocation ? (
+          <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                <MapPin className="w-4 h-4" />
-              </div>
+              <Loader2 className="w-4 h-4 text-brand-600 animate-spin shrink-0" />
               <div>
-                <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wide flex items-center gap-1.5">
-                  <span>GPS Location</span>
-                  <span className="text-emerald-700 font-normal">({locationSource})</span>
-                </div>
-                <div className="text-xs font-bold text-slate-800 font-mono flex items-center gap-1.5 mt-0.5">
-                  {isLocating ? (
-                    <span className="text-brand-600 animate-pulse font-sans flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Detecting coordinates...
-                    </span>
-                  ) : (
-                    <span>
-                      {locationData.latitude.toFixed(5)}, {locationData.longitude.toFixed(5)}
-                    </span>
-                  )}
-                </div>
+                <span className="font-bold text-slate-800 text-xs block">
+                  Location Status: Checking location...
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Acquiring device GPS coordinates & validating geo-fence perimeter...
+                </span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={detectLocation}
-                disabled={isLocating}
-                className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-200/60 rounded-lg transition-colors"
-                title="Refresh GPS Location"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-brand-600' : ''}`} />
-              </button>
-
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                  isLocating
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                }`}
-              >
-                <ShieldCheck className="w-3 h-3" />
-                {isLocating ? 'Locating...' : `±${Math.round(locationData.accuracy)}m`}
-              </span>
             </div>
           </div>
-
-          {!isLocating && (
-            <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400">
-              <span>Verified for audit & attendance records</span>
-              <a
-                href={`https://www.google.com/maps?q=${locationData.latitude},${locationData.longitude}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-brand-600 hover:text-brand-800 hover:underline font-medium"
-              >
-                Verify on Google Maps ↗
-              </a>
+        ) : locationError ? (
+          <div className="w-full bg-rose-50 border border-rose-200 rounded-xl p-3.5 mb-3 text-rose-800">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <span className="font-bold text-xs block">Location Permission Required</span>
+                <p className="text-[11px] text-rose-700">{locationError}</p>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="mt-2.5 pt-2 border-t border-rose-200 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={detectLocation}
+                icon={RefreshCw}
+                className="bg-white border-rose-300 text-rose-700 hover:bg-rose-100 text-xs py-1"
+              >
+                Retry Location Access
+              </Button>
+            </div>
+          </div>
+        ) : isLocationVerified ? (
+          <div className="w-full bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 mb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <span>✓ Location verified</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                    {geofenceCheck.result.matchedLocationName || 'Approved Location'}
+                    {geofenceCheck.result.geofenceStatus !== 'EXEMPT' && (
+                      <span className="font-mono ml-1.5">
+                        • Distance: {geofenceCheck.result.distance}m
+                        {geofenceCheck.result.allowedRadius ? ` (Allowed: ${geofenceCheck.result.allowedRadius}m)` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  className="p-1 text-slate-400 hover:text-brand-600 hover:bg-slate-200/60 rounded transition-colors"
+                  title="Refresh GPS"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono">
+                  <ShieldCheck className="w-3 h-3" />
+                  ±{Math.round(locationData.accuracy)}m
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : geofenceCheck.result?.reason === 'POOR_GPS_ACCURACY' ? (
+          <div className="w-full bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-3 text-amber-900">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <span className="font-bold text-xs block">
+                  ⚠ GPS accuracy is too low
+                </span>
+                <div className="text-[11px] text-amber-800">
+                  Current accuracy: <span className="font-mono font-bold">±{geofenceCheck.result?.currentAccuracy}m</span> • Required: <span className="font-mono font-bold">within ±{geofenceCheck.result?.requiredAccuracy}m</span>
+                </div>
+                <p className="text-[11px] text-amber-700">
+                  Your current GPS accuracy is too low for attendance verification. Please enable high-accuracy location or step outdoors and try again.
+                </p>
+              </div>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-amber-200 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={detectLocation}
+                icon={RefreshCw}
+                className="bg-white border-amber-300 text-amber-800 hover:bg-amber-100 text-xs py-1"
+              >
+                Retry High-Accuracy GPS
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full bg-rose-50 border border-rose-200 rounded-xl p-3.5 mb-3 text-rose-900">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <span className="font-bold text-xs block">
+                  ✕ Outside allowed area
+                </span>
+                {geofenceCheck.result?.nearestLocation ? (
+                  <>
+                    <div className="text-[11px] text-rose-800">
+                      Nearest location: <strong className="font-semibold">{geofenceCheck.result.nearestLocation.locationName}</strong>
+                    </div>
+                    <div className="text-[11px] text-rose-700 font-mono">
+                      Distance: {geofenceCheck.result.distance}m • Allowed: {geofenceCheck.result.allowedRadius}m
+                    </div>
+                    <div className="text-[11px] font-semibold text-rose-800 pt-0.5">
+                      You are {geofenceCheck.result.outsideMeters} meters outside the allowed attendance area.
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-rose-700">
+                    {geofenceCheck.result?.message || 'No approved attendance locations match your current position.'}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-2.5 pt-2 border-t border-rose-200 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={detectLocation}
+                icon={RefreshCw}
+                className="bg-white border-rose-300 text-rose-700 hover:bg-rose-100 text-xs py-1"
+              >
+                Re-check Current Location
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* 2. Camera Viewfinder Area */}
         <div className="relative w-full aspect-4/3 bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-700 shadow-inner flex items-center justify-center mb-4">
@@ -383,6 +529,18 @@ export const PunchVerificationModal = ({
                   <p className="text-xs text-emerald-200 mt-0.5">Status updated successfully</p>
                 </div>
               )}
+            </div>
+          ) : !isLocationVerified ? (
+            <div className="p-6 text-center text-slate-400 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-500 mb-2 border border-slate-700">
+                <Lock className="w-6 h-6" />
+              </div>
+              <p className="text-xs font-semibold text-slate-300">Camera Locked</p>
+              <p className="text-[11px] text-slate-500 mt-1 max-w-xs leading-relaxed">
+                {isCheckingLocation
+                  ? 'Verifying your GPS coordinates against allowed geo-fence perimeters...'
+                  : 'Live selfie camera will activate once you are within an approved attendance area.'}
+              </p>
             </div>
           ) : cameraError ? (
             <div className="p-6 text-center text-slate-300">
@@ -434,18 +592,26 @@ export const PunchVerificationModal = ({
           {!photoData ? (
             <>
               <Button
-                variant="success"
+                variant={isLocationVerified ? 'success' : 'secondary'}
                 size="lg"
                 onClick={() => handleCaptureAndPunch()}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !isLocationVerified}
                 isLoading={isSubmitting}
                 icon={Camera}
-                className="w-full py-3.5 shadow-md shadow-emerald-500/20 text-sm font-bold"
+                className={`w-full py-3.5 text-sm font-bold ${
+                  isLocationVerified
+                    ? 'shadow-md shadow-emerald-500/20'
+                    : 'opacity-50 cursor-not-allowed bg-slate-300 text-slate-600'
+                }`}
               >
-                {isSubmitting ? 'Verifying & Recording...' : getButtonText()}
+                {isSubmitting
+                  ? 'Verifying & Recording...'
+                  : !isLocationVerified
+                  ? 'Outside Geo-Fence Perimeter'
+                  : getButtonText()}
               </Button>
 
-              {!cameraError && (
+              {isLocationVerified && !cameraError && (
                 <button
                   type="button"
                   onClick={() => handleCaptureAndPunch(createSimulatedPhoto())}

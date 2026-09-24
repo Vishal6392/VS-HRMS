@@ -288,6 +288,18 @@ export const Reports = () => {
                             <span>View on Maps</span>
                             <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                           </a>
+                        ) : k === 'geofenceStatus' ? (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              val === 'ALLOWED'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : val === 'EXEMPT'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}
+                          >
+                            {String(val)}
+                          </span>
                         ) : typeof val === 'number' ? (
                           <span className="font-mono font-semibold">
                             {k.toLowerCase().includes('lat') || k.toLowerCase().includes('long')

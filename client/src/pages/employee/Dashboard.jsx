@@ -12,6 +12,8 @@ import PunchActionCard from '../../components/attendance/PunchActionCard';
 import AttendanceTimeline from '../../components/attendance/AttendanceTimeline';
 import {
   Calendar,
+  CalendarDays,
+  Gift,
   Clock,
   Coffee,
   Flame,
@@ -89,13 +91,20 @@ export const EmployeeDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDayRecord, setSelectedDayRecord] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [myRoster, setMyRoster] = useState(null);
 
-  // 1. Fetch Today Attendance & Shift Info
+  // 1. Fetch Today Attendance & Shift Info + My Shift Roster
   const fetchTodayData = async () => {
     try {
-      const res = await api.get('/attendance/today');
-      if (res.data.success) {
-        setTodayData(res.data);
+      const [todayRes, rosterRes] = await Promise.all([
+        api.get('/attendance/today'),
+        api.get('/rosters/my-roster').catch(() => ({ data: { success: false } })),
+      ]);
+      if (todayRes.data.success) {
+        setTodayData(todayRes.data);
+      }
+      if (rosterRes.data?.success) {
+        setMyRoster(rosterRes.data);
       }
     } catch (err) {
       console.error('Failed to load today attendance:', err);
@@ -357,7 +366,82 @@ export const EmployeeDashboard = () => {
         </div>
       </div>
 
-      {/* 2. Today's Shift & Punch Actions Area */}
+      {/* 2. Today's Roster Status Notice */}
+      {todayData?.todaySchedule && (
+        <div>
+          {todayData.todaySchedule.isWeeklyOff && (
+            <div className="bg-slate-100/90 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between text-xs mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-1 rounded-md bg-slate-200 text-slate-700 font-bold text-[10px] font-mono">
+                  WEEK OFF
+                </span>
+                <div>
+                  <span className="font-bold text-slate-800 block text-xs">
+                    Today is your Scheduled Weekly Off
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    No attendance required today. If you perform emergency duty, your attendance punch will be automatically recorded as Week Off Worked.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {todayData.todaySchedule.isCompOff && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3.5 flex items-center justify-between text-xs mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-1 rounded-md bg-purple-100 text-purple-800 font-bold text-[10px] font-mono">
+                  COMP OFF
+                </span>
+                <div>
+                  <span className="font-bold text-purple-900 block text-xs">
+                    Today is your Approved Compensatory Off
+                  </span>
+                  <span className="text-[11px] text-purple-700">
+                    Compensatory off granted for duty performed{todayData.todaySchedule.compOffForDate ? ` on ${todayData.todaySchedule.compOffForDate}` : ''}.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {todayData.todaySchedule.isHoliday && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between text-xs mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-1 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px] font-mono">
+                  HOLIDAY
+                </span>
+                <div>
+                  <span className="font-bold text-amber-900 block text-xs">
+                    Today is a Holiday: {todayData.todaySchedule.holidayName || 'Public Holiday'}
+                  </span>
+                  <span className="text-[11px] text-amber-700">
+                    Enjoy your holiday! If assigned for 24x7 coverage, attendance will be recorded as Holiday Worked.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {todayData.todaySchedule.remarks && !todayData.todaySchedule.isWeeklyOff && !todayData.todaySchedule.isCompOff && !todayData.todaySchedule.isHoliday && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3.5 flex items-center justify-between text-xs mb-3">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                <div>
+                  <span className="font-bold text-indigo-900 block text-xs">
+                    Scheduled Shift: {todayData.shift?.shiftName}
+                  </span>
+                  <span className="text-[11px] text-indigo-700">
+                    {todayData.todaySchedule.remarks}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Today's Shift & Punch Actions Area */}
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TodayShiftCard
@@ -371,6 +455,75 @@ export const EmployeeDashboard = () => {
             onPunchSuccess={handlePunchSuccess}
           />
         </div>
+
+        {/* Next 7 Days Roster Card */}
+        {myRoster?.upcoming && myRoster.upcoming.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-brand-600" />
+                <span className="font-bold text-xs text-slate-800 uppercase tracking-wider">
+                  Upcoming 7-Day Schedule
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">
+                IT Support 24x7 Rotation
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+              {myRoster.upcoming.slice(0, 7).map((d) => {
+                const isWorking = d.expectedStatus === 'WORKING';
+                const isWO = d.expectedStatus === 'WEEK_OFF';
+                const isCO = d.expectedStatus === 'COMP_OFF';
+                const isH = d.expectedStatus === 'HOLIDAY';
+
+                return (
+                  <div
+                    key={d.date}
+                    className={`p-2.5 rounded-xl border text-center transition-all ${
+                      d.isToday
+                        ? 'border-brand-500 bg-brand-50/40 ring-2 ring-brand-400/30'
+                        : 'border-slate-200 bg-slate-50/60'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">
+                      {d.dayName}
+                    </div>
+                    <div className="text-xs font-extrabold text-slate-800 my-0.5">
+                      {d.date.slice(8, 10)} {MONTH_NAMES[parseInt(d.date.slice(5, 7), 10) - 1]?.slice(0, 3)}
+                    </div>
+                    <div>
+                      {isWorking && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                          {d.shift?.shiftCode || 'WORK'}
+                        </span>
+                      )}
+                      {isWO && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
+                          WEEK OFF
+                        </span>
+                      )}
+                      {isCO && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+                          COMP OFF
+                        </span>
+                      )}
+                      {isH && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
+                          HOLIDAY
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[9px] text-slate-500 truncate mt-1">
+                      {isWorking && d.shift ? `${d.shift.startTime} - ${d.shift.endTime}` : (d.remarks || '—')}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Collapsible Today's Activity Timeline */}
         {todayData?.summary?.events && todayData.summary.events.length > 0 && (
@@ -849,6 +1002,13 @@ export const EmployeeDashboard = () => {
                             <span>
                               {ev.latitude.toFixed(5)}, {ev.longitude.toFixed(5)} (±{Math.round(ev.accuracy || 12)}m)
                             </span>
+                          </div>
+                        )}
+
+                        {ev.matchedLocationName && (
+                          <div className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span>{ev.matchedLocationName} ({ev.distanceFromLocation}m away)</span>
                           </div>
                         )}
                       </div>

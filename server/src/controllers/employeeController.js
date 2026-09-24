@@ -126,6 +126,7 @@ export const createEmployee = async (req, res) => {
       reportingManager: reportingManager ? reportingManager.trim() : '',
       assignedShift,
       profilePhoto: profilePhoto || '',
+      attendanceLocationPolicy: req.body.attendanceLocationPolicy || 'ASSIGNED_LOCATIONS',
       employmentStatus: 'ACTIVE',
     });
 
@@ -188,6 +189,7 @@ export const updateEmployee = async (req, res) => {
       'assignedShift',
       'profilePhoto',
       'employmentStatus',
+      'attendanceLocationPolicy',
     ];
 
     allowedFields.forEach((field) => {

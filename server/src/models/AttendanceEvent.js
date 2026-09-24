@@ -61,6 +61,24 @@ const attendanceEventSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    matchedLocation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Location',
+      default: null,
+    },
+    matchedLocationName: {
+      type: String,
+      default: '',
+    },
+    distanceFromLocation: {
+      type: Number,
+      default: 0,
+    },
+    geofenceStatus: {
+      type: String,
+      enum: ['ALLOWED', 'BLOCKED', 'EXEMPT', 'NOT_APPLICABLE'],
+      default: 'ALLOWED',
+    },
   },
   {
     timestamps: true,

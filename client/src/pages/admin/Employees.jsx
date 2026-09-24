@@ -22,6 +22,7 @@ import {
   KeyRound,
   Trash2,
   AlertTriangle,
+  MapPin,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatDate } from '../../utils/formatters';
@@ -50,6 +51,23 @@ export const Employees = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
 
+  // Manage Locations Modal State
+  const [isLocationsModalOpen, setIsLocationsModalOpen] = useState(false);
+  const [targetEmpForLocations, setTargetEmpForLocations] = useState(null);
+  const [assignedLocations, setAssignedLocations] = useState([]);
+  const [availableLocations, setAvailableLocations] = useState([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+  const [locationPolicy, setLocationPolicy] = useState('ASSIGNED_LOCATIONS');
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const [policySuccessMsg, setPolicySuccessMsg] = useState(null);
+  const [assignForm, setAssignForm] = useState({
+    locationId: '',
+    validFrom: '',
+    validTill: '',
+  });
+  const [isAssigningLocation, setIsAssigningLocation] = useState(false);
+  const [locationModalError, setLocationModalError] = useState(null);
+
   // Form State
   const initialForm = {
     employeeId: '',
@@ -62,6 +80,7 @@ export const Employees = () => {
     reportingManager: '',
     assignedShift: '',
     password: 'Password@123',
+    attendanceLocationPolicy: 'ASSIGNED_LOCATIONS',
   };
   const [formData, setFormData] = useState(initialForm);
 
@@ -120,8 +139,117 @@ export const Employees = () => {
       joiningDate: emp.joiningDate ? emp.joiningDate.split('T')[0] : '',
       reportingManager: emp.reportingManager || '',
       assignedShift: emp.assignedShift?._id || emp.assignedShift || '',
+      attendanceLocationPolicy: emp.attendanceLocationPolicy || 'ASSIGNED_LOCATIONS',
     });
     setIsEditModalOpen(true);
+  };
+
+  const handleOpenManageLocations = async (emp) => {
+    setTargetEmpForLocations(emp);
+    setLocationPolicy(emp.attendanceLocationPolicy || 'ASSIGNED_LOCATIONS');
+    setLocationModalError(null);
+    setPolicySuccessMsg(null);
+    setAssignForm({ locationId: '', validFrom: '', validTill: '' });
+    setIsLocationsModalOpen(true);
+    setIsLoadingLocations(true);
+
+    try {
+      const [asgRes, locRes] = await Promise.all([
+        api.get(`/locations/employee/${emp._id}`),
+        api.get('/locations?status=ACTIVE'),
+      ]);
+
+      if (asgRes.data.success) {
+        setAssignedLocations(asgRes.data.data || []);
+        if (asgRes.data.employee?.attendanceLocationPolicy) {
+          setLocationPolicy(asgRes.data.employee.attendanceLocationPolicy);
+        }
+      }
+
+      if (locRes.data.success) {
+        setAvailableLocations(locRes.data.data || []);
+        if (locRes.data.data.length > 0) {
+          setAssignForm((prev) => ({ ...prev, locationId: locRes.data.data[0]._id }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load employee location assignments:', err);
+      setLocationModalError('Failed to load location assignments.');
+    } finally {
+      setIsLoadingLocations(false);
+    }
+  };
+
+  const handleSavePolicy = async () => {
+    if (!targetEmpForLocations) return;
+    setIsSavingPolicy(true);
+    setLocationModalError(null);
+    setPolicySuccessMsg(null);
+
+    try {
+      const res = await api.patch(`/locations/employee/${targetEmpForLocations._id}/policy`, {
+        attendanceLocationPolicy: locationPolicy,
+      });
+      if (res.data.success) {
+        setPolicySuccessMsg(`Policy updated to ${locationPolicy}!`);
+        fetchEmployees();
+        setTimeout(() => setPolicySuccessMsg(null), 2000);
+      }
+    } catch (err) {
+      setLocationModalError(err.response?.data?.message || 'Failed to update policy.');
+    } finally {
+      setIsSavingPolicy(false);
+    }
+  };
+
+  const handleAssignLocationSubmit = async (e) => {
+    e.preventDefault();
+    if (!assignForm.locationId || !targetEmpForLocations) return;
+    setIsAssigningLocation(true);
+    setLocationModalError(null);
+
+    try {
+      const res = await api.post(`/locations/employee/${targetEmpForLocations._id}`, assignForm);
+      if (res.data.success) {
+        const asgRes = await api.get(`/locations/employee/${targetEmpForLocations._id}`);
+        if (asgRes.data.success) {
+          setAssignedLocations(asgRes.data.data || []);
+        }
+        setAssignForm({
+          locationId: availableLocations[0]?._id || '',
+          validFrom: '',
+          validTill: '',
+        });
+      }
+    } catch (err) {
+      setLocationModalError(err.response?.data?.message || 'Failed to assign location.');
+    } finally {
+      setIsAssigningLocation(false);
+    }
+  };
+
+  const handleToggleAssignment = async (asgId) => {
+    try {
+      await api.patch(`/locations/assignment/${asgId}/toggle-status`);
+      const asgRes = await api.get(`/locations/employee/${targetEmpForLocations._id}`);
+      if (asgRes.data.success) {
+        setAssignedLocations(asgRes.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to toggle assignment:', err);
+    }
+  };
+
+  const handleRemoveAssignment = async (asgId) => {
+    try {
+      await api.delete(`/locations/assignment/${asgId}`);
+      const asgRes = await api.get(`/locations/employee/${targetEmpForLocations._id}`);
+      if (asgRes.data.success) {
+        setAssignedLocations(asgRes.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to remove assignment:', err);
+    }
   };
 
   const handleEditSubmit = async (e) => {
@@ -391,6 +519,15 @@ export const Employees = () => {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={() => handleOpenManageLocations(emp)}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Manage Geofence Locations"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => handleEditOpen(emp)}
                           className="p-1.5 text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors"
                           title="Edit details"
@@ -599,6 +736,22 @@ export const Employees = () => {
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
               />
             </div>
+
+            <div>
+              <label className="block font-semibold uppercase text-slate-600 mb-1">
+                Attendance Location Policy
+              </label>
+              <select
+                value={formData.attendanceLocationPolicy}
+                onChange={(e) => setFormData({ ...formData, attendanceLocationPolicy: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="ASSIGNED_LOCATIONS">ASSIGNED_LOCATIONS (Standard)</option>
+                <option value="OFFICE_ONLY">OFFICE_ONLY (Office Premise Only)</option>
+                <option value="WFH_ONLY">WFH_ONLY (Work From Home Only)</option>
+                <option value="ANYWHERE">ANYWHERE (Exempt / Bypass Geofence)</option>
+              </select>
+            </div>
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
@@ -722,6 +875,22 @@ export const Employees = () => {
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
+
+            <div>
+              <label className="block font-semibold uppercase text-slate-600 mb-1">
+                Attendance Location Policy
+              </label>
+              <select
+                value={formData.attendanceLocationPolicy}
+                onChange={(e) => setFormData({ ...formData, attendanceLocationPolicy: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="ASSIGNED_LOCATIONS">ASSIGNED_LOCATIONS (Standard)</option>
+                <option value="OFFICE_ONLY">OFFICE_ONLY (Office Premise Only)</option>
+                <option value="WFH_ONLY">WFH_ONLY (Work From Home Only)</option>
+                <option value="ANYWHERE">ANYWHERE (Exempt / Bypass Geofence)</option>
+              </select>
+            </div>
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
@@ -839,6 +1008,254 @@ export const Employees = () => {
               onClick={handleConfirmDelete}
             >
               Yes, Delete Permanently
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Manage Locations Modal */}
+      <Modal
+        isOpen={isLocationsModalOpen}
+        onClose={() => setIsLocationsModalOpen(false)}
+        title={`Assigned Locations - ${targetEmpForLocations?.fullName || 'Employee'}`}
+        subtitle={`Employee ID: ${targetEmpForLocations?.employeeId} • Department: ${targetEmpForLocations?.department}`}
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4 text-xs">
+          {locationModalError && (
+            <div className="p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg">
+              {locationModalError}
+            </div>
+          )}
+
+          {policySuccessMsg && (
+            <div className="p-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg flex items-center gap-2 font-medium">
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{policySuccessMsg}</span>
+            </div>
+          )}
+
+          {/* 1. Attendance Location Policy Section */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div>
+              <span className="font-bold text-slate-800 block text-xs">
+                Attendance Location Policy
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Controls how geo-fencing is applied during punch verification for this employee.
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+              <select
+                value={locationPolicy}
+                onChange={(e) => setLocationPolicy(e.target.value)}
+                className="flex-1 w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium text-xs"
+              >
+                <option value="ASSIGNED_LOCATIONS">
+                  ASSIGNED_LOCATIONS (Allowed at any active assigned location)
+                </option>
+                <option value="OFFICE_ONLY">
+                  OFFICE_ONLY (Strictly restricted to approved OFFICE premises)
+                </option>
+                <option value="WFH_ONLY">
+                  WFH_ONLY (Strictly restricted to approved Work From Home locations)
+                </option>
+                <option value="ANYWHERE">
+                  ANYWHERE (Exempt from geofence - Punch from any coordinates)
+                </option>
+              </select>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSavePolicy}
+                isLoading={isSavingPolicy}
+                className="w-full sm:w-auto shrink-0 shadow-xs"
+              >
+                Save Policy
+              </Button>
+            </div>
+          </div>
+
+          {/* 2. Assign New Location Section */}
+          <div className="p-3 bg-brand-50/50 border border-brand-100 rounded-xl">
+            <span className="font-bold text-brand-900 block mb-2">
+              + Assign Work Location
+            </span>
+
+            {availableLocations.length === 0 ? (
+              <p className="text-[11px] text-slate-500">
+                No active locations available in Location Master. Please create a location first.
+              </p>
+            ) : (
+              <form onSubmit={handleAssignLocationSubmit} className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] uppercase font-semibold text-slate-600 mb-0.5">
+                    Select Location *
+                  </label>
+                  <select
+                    required
+                    value={assignForm.locationId}
+                    onChange={(e) => setAssignForm({ ...assignForm, locationId: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    {availableLocations.map((loc) => (
+                      <option key={loc._id} value={loc._id}>
+                        {loc.locationName} ({loc.locationType} • {loc.allowedRadiusMeters}m)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-semibold text-slate-600 mb-0.5">
+                    Valid From (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={assignForm.validFrom}
+                    onChange={(e) => setAssignForm({ ...assignForm, validFrom: e.target.value })}
+                    className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-semibold text-slate-600 mb-0.5">
+                    Valid Till (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={assignForm.validTill}
+                    onChange={(e) => setAssignForm({ ...assignForm, validTill: e.target.value })}
+                    className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-4 flex justify-end pt-1">
+                  <Button
+                    type="submit"
+                    variant="success"
+                    size="sm"
+                    isLoading={isAssigningLocation}
+                    className="shadow-xs"
+                  >
+                    Assign Location to Employee
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          {/* 3. Assigned Locations List */}
+          <div className="space-y-2">
+            <span className="font-bold text-slate-800 block text-xs">
+              Currently Assigned Locations ({assignedLocations.length})
+            </span>
+
+            {isLoadingLocations ? (
+              <div className="py-10 flex flex-col items-center justify-center text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin text-brand-600 mb-2" />
+                <span>Loading assigned locations...</span>
+              </div>
+            ) : assignedLocations.length === 0 ? (
+              <div className="py-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                No locations assigned yet. Assign a location above to enable geo-fenced attendance.
+              </div>
+            ) : (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-200">
+                      <th className="py-2.5 px-3">Location</th>
+                      <th className="py-2.5 px-3">Type</th>
+                      <th className="py-2.5 px-3">Radius</th>
+                      <th className="py-2.5 px-3">Validity</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {assignedLocations.map((asg) => {
+                      const loc = asg.locationId;
+                      const isPermanent = !asg.validFrom && !asg.validTill;
+
+                      return (
+                        <tr key={asg._id} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900">{loc?.locationName || 'Unknown Location'}</div>
+                            <div className="text-[10px] text-slate-400 truncate max-w-xs">{loc?.address}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                              {loc?.locationType || 'OFFICE'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
+                            {loc?.allowedRadiusMeters || 100}m
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                            {isPermanent ? (
+                              <span className="text-emerald-700 font-semibold">Permanent</span>
+                            ) : (
+                              <span>
+                                {asg.validFrom ? formatDate(asg.validFrom) : 'Open'} to{' '}
+                                {asg.validTill ? formatDate(asg.validTill) : 'Open'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                asg.status === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              {asg.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAssignment(asg._id)}
+                                className={`p-1 rounded transition-colors ${
+                                  asg.status === 'ACTIVE'
+                                    ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                    : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'
+                                }`}
+                                title={asg.status === 'ACTIVE' ? 'Deactivate assignment' : 'Activate assignment'}
+                              >
+                                {asg.status === 'ACTIVE' ? (
+                                  <XCircle className="w-3.5 h-3.5" />
+                                ) : (
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAssignment(asg._id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                title="Remove assignment"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex justify-end">
+            <Button variant="secondary" onClick={() => setIsLocationsModalOpen(false)}>
+              Done
             </Button>
           </div>
         </div>

@@ -7,6 +7,8 @@ export const LocationDisplay = ({
   longitude,
   accuracy,
   timestamp,
+  matchedLocationName,
+  distanceFromLocation,
   showMapLink = true,
   className = '',
 }) => {
@@ -24,6 +26,13 @@ export const LocationDisplay = ({
 
   return (
     <div className={`flex flex-col gap-1 text-xs ${className}`}>
+      {matchedLocationName && (
+        <div className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span>{matchedLocationName} {distanceFromLocation !== undefined ? `(${distanceFromLocation}m)` : ''}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-1.5 font-medium text-slate-700">
         <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
         <span>

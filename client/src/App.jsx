@@ -16,8 +16,10 @@ import Profile from './pages/employee/Profile';
 import AdminDashboard from './pages/admin/Dashboard';
 import Employees from './pages/admin/Employees';
 import Shifts from './pages/admin/Shifts';
+import ShiftRoster from './pages/admin/ShiftRoster';
 import AttendanceLive from './pages/admin/AttendanceLive';
 import Reports from './pages/admin/Reports';
+import Locations from './pages/admin/Locations';
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminManagement from './pages/admin/AdminManagement';
 
@@ -110,6 +112,8 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="employees" element={<Employees />} />
             <Route path="shifts" element={<Shifts />} />
+            <Route path="roster" element={<ShiftRoster />} />
+            <Route path="locations" element={<Locations />} />
             <Route path="attendance" element={<AttendanceLive />} />
             <Route path="reports" element={<Reports />} />
             <Route

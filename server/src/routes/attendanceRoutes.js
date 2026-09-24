@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   punchAttendance,
+  checkPunchLocation,
   getTodayAttendance,
   getMyAttendanceHistory,
   getAllAttendance,
@@ -14,6 +15,7 @@ const router = express.Router();
 router.use(protect);
 
 // Employee attendance actions
+router.post('/check-location', checkPunchLocation);
 router.post('/punch', punchAttendance);
 router.get('/today', getTodayAttendance);
 router.get('/my-history', getMyAttendanceHistory);

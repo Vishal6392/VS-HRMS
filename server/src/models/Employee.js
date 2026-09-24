@@ -59,6 +59,15 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    attendanceLocationPolicy: {
+      type: String,
+      enum: ['OFFICE_ONLY', 'WFH_ONLY', 'ASSIGNED_LOCATIONS', 'ANYWHERE'],
+      default: 'ASSIGNED_LOCATIONS',
+    },
+    weeklyOffDays: {
+      type: [Number], // 0 = Sunday, 1 = Monday, ..., 6 = Saturday (null = inherit department default)
+      default: null,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
