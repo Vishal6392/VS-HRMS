@@ -21,6 +21,20 @@ const userSchema = new mongoose.Schema(
       default: 'employee',
       required: true,
     },
+    name: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    isSuperAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    adminType: {
+      type: String,
+      enum: ['superadmin', 'subadmin'],
+      default: null,
+    },
     employee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Employee',

@@ -17,6 +17,7 @@ import employeeRoutes from './routes/employeeRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
+import adminUserRoutes from './routes/adminUserRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,6 +83,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/admin-users', adminUserRoutes);
 
 // In production, serve Vite client build from client/dist (for Render deployment)
 const clientDistPath = path.resolve(__dirname, '../../client/dist');

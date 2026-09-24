@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   Shield,
+  UserCog,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -25,13 +26,20 @@ export const AdminLayout = () => {
     navigate('/login');
   };
 
+  const isSuperAdmin = Boolean(user?.isSuperAdmin);
+
   const navLinks = [
     { label: 'Overview Dashboard', to: '/admin/dashboard', icon: LayoutDashboard },
     { label: 'Employees Master', to: '/admin/employees', icon: Users },
     { label: 'Shift Master', to: '/admin/shifts', icon: Clock },
     { label: 'Attendance Live', to: '/admin/attendance', icon: CalendarCheck },
     { label: 'Reports & Export', to: '/admin/reports', icon: FileBarChart },
-    { label: 'Admin Audit Logs', to: '/admin/audit-logs', icon: History },
+    ...(isSuperAdmin
+      ? [
+          { label: 'Admin Audit Logs', to: '/admin/audit-logs', icon: History },
+          { label: 'Sub-Admin Manager', to: '/admin/admins', icon: UserCog },
+        ]
+      : []),
   ];
 
   return (
@@ -42,7 +50,9 @@ export const AdminLayout = () => {
           <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white">
             <Building2 className="w-4 h-4" />
           </div>
-          <span className="font-bold text-sm tracking-wide">AV HRMS ADMIN</span>
+          <span className="font-bold text-sm tracking-wide">
+            AV HRMS {isSuperAdmin ? 'SUPERADMIN' : 'ADMIN'}
+          </span>
         </div>
         <button
           type="button"
@@ -66,7 +76,9 @@ export const AdminLayout = () => {
           </div>
           <div>
             <h1 className="text-sm font-bold text-white tracking-wide">AV HRMS</h1>
-            <p className="text-[10px] text-slate-400 font-medium">SUPERADMIN PORTAL</p>
+            <p className="text-[10px] text-slate-400 font-medium">
+              {isSuperAdmin ? 'SUPERADMIN PORTAL' : 'ADMIN PORTAL'}
+            </p>
           </div>
         </div>
 
@@ -99,11 +111,11 @@ export const AdminLayout = () => {
           <div className="flex items-center justify-between">
             <div className="truncate">
               <div className="text-xs font-semibold text-white truncate">
-                {user?.fullName || user?.employee?.fullName || user?.email || 'Super Admin'}
+                {user?.fullName || user?.employee?.fullName || user?.email || (isSuperAdmin ? 'Super Admin' : 'Admin')}
               </div>
               <div className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Online (Admin)
+                Online ({isSuperAdmin ? 'Super Admin' : 'Sub-Admin'})
               </div>
             </div>
             <button

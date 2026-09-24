@@ -63,6 +63,12 @@ export const login = async (req, res) => {
       });
     }
 
+    const superAdminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    const isSuper = user.isSuperAdmin === true || (user.role === 'admin' && user.email.toLowerCase() === superAdminEmail);
+    const fullName = isSuper
+      ? (process.env.SUPERADMIN_NAME || user.name || 'Super Admin')
+      : (user.name || (user.employee ? user.employee.fullName : user.email));
+
     res.json({
       success: true,
       message: 'Login successful',
@@ -71,7 +77,9 @@ export const login = async (req, res) => {
         _id: user._id,
         email: user.email,
         role: user.role,
-        fullName: user.role === 'admin' ? (process.env.SUPERADMIN_NAME || 'Super Admin') : (user.employee ? user.employee.fullName : user.email),
+        isSuperAdmin: isSuper,
+        adminType: isSuper ? 'superadmin' : (user.adminType || (user.role === 'admin' ? 'subadmin' : null)),
+        fullName,
         employee: user.employee,
       },
     });
@@ -198,13 +206,21 @@ export const getMe = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
+    const superAdminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    const isSuper = user.isSuperAdmin === true || (user.role === 'admin' && user.email.toLowerCase() === superAdminEmail);
+    const fullName = isSuper
+      ? (process.env.SUPERADMIN_NAME || user.name || 'Super Admin')
+      : (user.name || (user.employee ? user.employee.fullName : user.email));
+
     res.json({
       success: true,
       user: {
         _id: user._id,
         email: user.email,
         role: user.role,
-        fullName: user.role === 'admin' ? (process.env.SUPERADMIN_NAME || 'Super Admin') : (user.employee ? user.employee.fullName : user.email),
+        isSuperAdmin: isSuper,
+        adminType: isSuper ? 'superadmin' : (user.adminType || (user.role === 'admin' ? 'subadmin' : null)),
+        fullName,
         employee: user.employee,
       },
     });
@@ -224,7 +240,10 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
     }
 
-    if (req.user.role === 'admin') {
+    const superAdminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+    const isSuper = req.user.isSuperAdmin === true || (req.user.role === 'admin' && req.user.email.toLowerCase() === superAdminEmail);
+
+    if (isSuper) {
       return res.status(403).json({
         success: false,
         message: 'SuperAdmin password is managed directly via Render Environment Variables (SUPERADMIN_PASSWORD).',

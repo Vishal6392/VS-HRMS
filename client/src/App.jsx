@@ -19,6 +19,7 @@ import Shifts from './pages/admin/Shifts';
 import AttendanceLive from './pages/admin/AttendanceLive';
 import Reports from './pages/admin/Reports';
 import AuditLogs from './pages/admin/AuditLogs';
+import AdminManagement from './pages/admin/AdminManagement';
 
 // On GitHub Pages, use HashRouter to prevent 404 on page reload
 const Router =
@@ -49,6 +50,16 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
+  return children;
+};
+
+// Guard strictly for Super Admin (blocks Sub-Admins from audit logs and admin user management)
+const SuperAdminRoute = ({ children }) => {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user?.isSuperAdmin) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
   return children;
 };
 
@@ -101,7 +112,22 @@ function App() {
             <Route path="shifts" element={<Shifts />} />
             <Route path="attendance" element={<AttendanceLive />} />
             <Route path="reports" element={<Reports />} />
-            <Route path="audit-logs" element={<AuditLogs />} />
+            <Route
+              path="audit-logs"
+              element={
+                <SuperAdminRoute>
+                  <AuditLogs />
+                </SuperAdminRoute>
+              }
+            />
+            <Route
+              path="admins"
+              element={
+                <SuperAdminRoute>
+                  <AdminManagement />
+                </SuperAdminRoute>
+              }
+            />
           </Route>
 
           {/* Fallback Root Navigation */}

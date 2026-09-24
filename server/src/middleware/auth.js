@@ -42,3 +42,19 @@ export const requireRole = (...roles) => {
     next();
   };
 };
+
+export const requireSuperAdmin = (req, res, next) => {
+  const superAdminEmail = (process.env.SUPERADMIN_EMAIL || 'admin@hrms.local').toLowerCase();
+  const isSuper =
+    req.user?.isSuperAdmin === true ||
+    (req.user?.role === 'admin' && req.user?.email?.toLowerCase() === superAdminEmail);
+
+  if (!isSuper) {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden: Access restricted to Super Admin only. Sub-Admins cannot access this resource.',
+    });
+  }
+  next();
+};
+

@@ -29,15 +29,19 @@ export const syncSuperAdminFromEnv = async () => {
     await AttendanceSummary.deleteMany({ employeeId: 'ADM001' });
 
     // 2. Find or create the SuperAdmin User
-    let adminUser = await User.findOne({
-      $or: [{ role: 'admin' }, { email: adminEmail }],
-    });
+    let adminUser = await User.findOne({ email: adminEmail });
+    if (!adminUser) {
+      adminUser = await User.findOne({ isSuperAdmin: true });
+    }
 
     if (!adminUser) {
       adminUser = new User({
         email: adminEmail,
         password: adminPassword,
         role: 'admin',
+        name: adminName,
+        isSuperAdmin: true,
+        adminType: 'superadmin',
         employee: null,
         isActive: true,
       });
@@ -47,6 +51,9 @@ export const syncSuperAdminFromEnv = async () => {
       // Synchronize email and password from environment variables
       adminUser.email = adminEmail;
       adminUser.role = 'admin';
+      adminUser.name = adminName;
+      adminUser.isSuperAdmin = true;
+      adminUser.adminType = 'superadmin';
       adminUser.employee = null;
       adminUser.isActive = true;
 
