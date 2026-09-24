@@ -1,5 +1,5 @@
 {
-  "name": "vs-hrms-server",
+  "name": "av-hrms-server",
   "version": "1.0.0",
   "description": "Backend API for Attendance and Shift Management",
   "main": "src/index.js",

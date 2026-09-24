@@ -1,4 +1,4 @@
-# VS HRMS - Modern Attendance & Shift Management Web Application
+# AV HRMS - Modern Attendance & Shift Management Web Application
 
 Production-ready, responsive web application for internal employee attendance, break tracking, shift management, location verification, and live camera photo audit.
 
@@ -38,7 +38,7 @@ Production-ready, responsive web application for internal employee attendance, b
 
 1. Clone or open the repository:
    ```bash
-   cd "VS HRMS"
+   cd "AV HRMS"
    ```
 
 2. Run development servers (concurrently starts backend on port 5000 and Vite frontend on port 5173):

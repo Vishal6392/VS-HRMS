@@ -42,7 +42,7 @@ export const AdminLayout = () => {
           <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white">
             <Building2 className="w-4 h-4" />
           </div>
-          <span className="font-bold text-sm tracking-wide">VS HRMS ADMIN</span>
+          <span className="font-bold text-sm tracking-wide">AV HRMS ADMIN</span>
         </div>
         <button
           type="button"
@@ -65,7 +65,7 @@ export const AdminLayout = () => {
             <Shield className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-wide">VS HRMS</h1>
+            <h1 className="text-sm font-bold text-white tracking-wide">AV HRMS</h1>
             <p className="text-[10px] text-slate-400 font-medium">SUPERADMIN PORTAL</p>
           </div>
         </div>

@@ -37,7 +37,7 @@ export const EmployeeLayout = () => {
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-brand-600">
-                VS HRMS
+                AV HRMS
               </div>
               <h1 className="text-sm font-bold text-slate-900 leading-tight">
                 {user?.employee?.fullName || 'Employee Portal'}

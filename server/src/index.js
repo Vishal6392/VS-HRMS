@@ -71,7 +71,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'VS HRMS Attendance Engine',
+    service: 'AV HRMS Attendance Engine',
   });
 });
 
@@ -105,7 +105,7 @@ app.get('*', (req, res, next) => {
     if (err) {
       // If client not yet built, return simple JSON
       res.json({
-        message: 'VS HRMS API Server is operational. Run Vite dev server for frontend UI.',
+        message: 'AV HRMS API Server is operational. Run Vite dev server for frontend UI.',
       });
     }
   });
